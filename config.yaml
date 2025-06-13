@@ -4,13 +4,12 @@ dataset_lang: as
 dataset_name: mozilla-foundation/common_voice_11_0
 dataset_cache: ./datasets
 model_lang: assamese
-model_name: whisper-medium
+model_name: whisper-large
 model_cache: ./models
 gpu_device: null
 whisper_pretrained: null
 checkpoint_name: null
 checkpoint_dir: null
-training_max_steps: 4000
 hf_token: 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
 
 # Training arguments

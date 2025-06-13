@@ -54,44 +54,55 @@ class DataCollatorSpeechSeq2SeqWithPadding:
         return batch
 
 def finetune_whisper(
-    dataset_lang="as",
-    dataset_name="mozilla-foundation/common_voice_11_0",
-    dataset_cache="./datasets",
-    model_lang="assamese",
-    model_name="whisper-large",
-    model_cache="./models",
-    whisper_pretrained=None,
-    checkpoint_name=None,
-    checkpoint_dir=None,
-    training_max_steps=4000,
-    gpu_device=None,
-    hf_token=None,
     training_args_dict=None,
     **kwargs
 ):
-    # Remove incorrect torch.cuda.set_device usage
-    # Device is already set at script start using CUDA_VISIBLE_DEVICES and torch.cuda.set_device(0)
-    print("\n===== Whisper Fine-tuning Arguments =====")
-    print(f"dataset_lang: {dataset_lang}")
-    print(f"dataset_name: {dataset_name}")
-    print(f"dataset_cache: {dataset_cache}")
-    print(f"model_lang: {model_lang}")
-    print(f"model_name: {model_name}")
-    print(f"model_cache: {model_cache}")
-    print(f"whisper_pretrained: {whisper_pretrained}")
-    print(f"checkpoint_name: {checkpoint_name}")
-    print(f"checkpoint_dir: {checkpoint_dir}")
-    print(f"training_max_steps: {training_max_steps}")
-    print(f"gpu_device: {gpu_device}")
-    if kwargs:
-        print(f"Other kwargs: {kwargs}")
-    print("========================================\n")
-    if whisper_pretrained is None:
-        whisper_pretrained = f"openai/{model_name}"
-    if checkpoint_name is None:
-        checkpoint_name = f"{model_name}-{model_lang}"
-    if checkpoint_dir is None:
-        checkpoint_dir = f"./checkpoints/{checkpoint_name}"
+    # Unpack all config values from training_args_dict and kwargs
+    config = {**kwargs, **(training_args_dict or {})}
+    # Assign all variables from config, applying derived defaults first
+    dataset_lang = config.get('dataset_lang')
+    dataset_name = config.get('dataset_name')
+    dataset_cache = config.get('dataset_cache')
+    model_lang = config.get('model_lang')
+    model_name = config.get('model_name')
+    model_cache = config.get('model_cache')
+    whisper_pretrained = config.get('whisper_pretrained') or (f"openai/{model_name}" if model_name else None)
+    checkpoint_name = config.get('checkpoint_name') or (f"{model_name}-{model_lang}" if model_name and model_lang else None)
+    checkpoint_dir = config.get('checkpoint_dir') or (f"./checkpoints/{checkpoint_name}" if checkpoint_name else None)
+    max_steps = config.get('max_steps')
+    gpu_device = config.get('gpu_device')
+    hf_token = config.get('hf_token')
+    # Update config dict with derived values so printout is correct
+    config['whisper_pretrained'] = whisper_pretrained
+    config['checkpoint_name'] = checkpoint_name
+    config['checkpoint_dir'] = checkpoint_dir
+    # General config keys
+    general_keys = [
+        'dataset_lang','dataset_name','dataset_cache','model_lang','model_name','model_cache',
+        'whisper_pretrained','checkpoint_name','checkpoint_dir','gpu_device','hf_token'
+    ]
+    print("\n===== Whisper Fine-tuning: General Configuration =====")
+    for k in general_keys:
+        print(f"{k}: {config.get(k)}")
+    print("\n===== Whisper Fine-tuning: Training Arguments =====")
+    for k, v in config.items():
+        if k not in general_keys:
+            print(f"{k}: {v}")
+    print("====================================================\n")
+
+    # Assign all variables from config
+    dataset_lang = config.get('dataset_lang')
+    dataset_name = config.get('dataset_name')
+    dataset_cache = config.get('dataset_cache')
+    model_lang = config.get('model_lang')
+    model_name = config.get('model_name')
+    model_cache = config.get('model_cache')
+    whisper_pretrained = config.get('whisper_pretrained') or f"openai/{model_name}"
+    checkpoint_name = config.get('checkpoint_name') or f"{model_name}-{model_lang}"
+    checkpoint_dir = config.get('checkpoint_dir') or f"./checkpoints/{checkpoint_name}"
+    max_steps = config.get('max_steps')
+    gpu_device = config.get('gpu_device')
+    hf_token = config.get('hf_token')
 
     # Load dataset
     common_voice = DatasetDict()
@@ -153,7 +164,7 @@ def finetune_whisper(
     training_args_dict.setdefault('gradient_accumulation_steps', 1)
     training_args_dict.setdefault('learning_rate', 1e-5)
     training_args_dict.setdefault('warmup_steps', 500)
-    training_args_dict.setdefault('max_steps', training_max_steps)
+    training_args_dict.setdefault('max_steps', max_steps)
     training_args_dict.setdefault('gradient_checkpointing', True)
     training_args_dict.setdefault('fp16', True)
     training_args_dict.setdefault('eval_strategy', 'steps')
@@ -230,7 +241,7 @@ def main():
     parser.add_argument("-wp", "--whisper-pretrained", dest="whisper_pretrained", type=str, default=None, help="Whisper pretrained model (default: openai/<model_name>)")
     parser.add_argument("-ck", "--checkpoint-name", dest="checkpoint_name", type=str, default=None, help="Checkpoint name (default: <model_name>-<model_lang>)")
     parser.add_argument("-cd", "--checkpoint-dir", dest="checkpoint_dir", type=str, default=None, help="Checkpoint directory (default: ./checkpoints/<checkpoint_name>)")
-    parser.add_argument("-t", "--train-steps", dest="training_max_steps", type=int, default=None, help="Max training steps (default: 4000)")
+    parser.add_argument('-t', '--max-steps', dest='max_steps', type=int, default=None, help='Max training steps (default: 4000)')
     parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
     parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
     args = parser.parse_args()
@@ -252,7 +263,7 @@ def main():
     whisper_pretrained = args.whisper_pretrained if args.whisper_pretrained is not None else config_dict.get('whisper_pretrained', f"openai/{model_name}")
     checkpoint_name = args.checkpoint_name if args.checkpoint_name is not None else config_dict.get('checkpoint_name', f"{model_name}-{model_lang}")
     checkpoint_dir = args.checkpoint_dir if args.checkpoint_dir is not None else config_dict.get('checkpoint_dir', f"./checkpoints/{checkpoint_name}")
-    training_max_steps = args.training_max_steps if args.training_max_steps is not None else config_dict.get('training_max_steps', 4000)
+    max_steps = args.max_steps if args.max_steps is not None else config_dict.get('max_steps', 4000)
     gpu_device = args.gpu_device if args.gpu_device is not None else config_dict.get('gpu_device', None)
     hf_token = config_dict.get('hf_token', None)
 
@@ -270,7 +281,7 @@ def main():
         whisper_pretrained=whisper_pretrained,
         checkpoint_name=checkpoint_name,
         checkpoint_dir=checkpoint_dir,
-        training_max_steps=training_max_steps,
+        max_steps=max_steps,
         gpu_device=gpu_device,
         hf_token=hf_token,
         training_args_dict=training_args_dict
