@@ -67,10 +67,8 @@ def finetune_whisper(
     gpu_device=None,
     **kwargs
 ):
-    if gpu_device is not None:
-        import torch
-        torch.cuda.set_device(int(gpu_device))
-        print(f"Set torch CUDA device to {gpu_device}")
+    # Remove incorrect torch.cuda.set_device usage
+    # Device is already set at script start using CUDA_VISIBLE_DEVICES and torch.cuda.set_device(0)
     print("\n===== Whisper Fine-tuning Arguments =====")
     print(f"dataset_lang: {dataset_lang}")
     print(f"dataset_name: {dataset_name}")
