@@ -204,9 +204,9 @@ def finetune_whisper(
 
 def main():
     parser = argparse.ArgumentParser(description="Fine-tune Whisper for multilingual ASR")
-    parser.add_argument("-l", "--lang", dest="dataset_lang", type=str, default=None, help="Dataset language (default: as)")
-    parser.add_argument("-n", "--name", dest="dataset_name", type=str, default=None, help="Dataset name (default: mozilla-foundation/common_voice_11_0)")
-    parser.add_argument("-c", "--cache", dest="dataset_cache", type=str, default=None, help="Dataset cache directory (default: ./datasets)")
+    parser.add_argument("-dl", "--lang", dest="dataset_lang", type=str, default=None, help="Dataset language (default: as)")
+    parser.add_argument("-dn", "--name", dest="dataset_name", type=str, default=None, help="Dataset name (default: mozilla-foundation/common_voice_11_0)")
+    parser.add_argument("-dc", "--cache", dest="dataset_cache", type=str, default=None, help="Dataset cache directory (default: ./datasets)")
     parser.add_argument("-ml", "--model-lang", dest="model_lang", type=str, default=None, help="Model language (default: assamese)")
     parser.add_argument("-mn", "--model-name", dest="model_name", type=str, default=None, help="Model name (default: whisper-medium)")
     parser.add_argument("-mc", "--model-cache", dest="model_cache", type=str, default=None, help="Model cache directory (default: ./models)")
