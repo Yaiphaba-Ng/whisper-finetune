@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import torch  # Ensure torch is imported at the top
+import yaml  # Add at the top with other imports
 
 # Early parse for GPU and Hugging Face token
 parser = argparse.ArgumentParser()
@@ -65,6 +66,7 @@ def finetune_whisper(
     checkpoint_dir=None,
     training_max_steps=4000,
     gpu_device=None,
+    training_args_config=None,  # New argument
     **kwargs
 ):
     # Remove incorrect torch.cuda.set_device usage
@@ -145,29 +147,34 @@ def finetune_whisper(
         label_str = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
         wer = 100 * metric.compute(predictions=pred_str, references=label_str)
         return {"wer": wer}
-    # Training args
-    training_args = Seq2SeqTrainingArguments(
-        output_dir=checkpoint_dir,
-        per_device_train_batch_size=16,
-        gradient_accumulation_steps=1,
-        learning_rate=1e-5,
-        warmup_steps=500,
-        max_steps=training_max_steps,
-        gradient_checkpointing=True,
-        fp16=True,
-        eval_strategy="steps",
-        per_device_eval_batch_size=8,
-        predict_with_generate=True,
-        generation_max_length=225,
-        save_steps=1000,
-        eval_steps=1000,
-        logging_steps=25,
-        report_to=["tensorboard"],
-        load_best_model_at_end=True,
-        metric_for_best_model="wer",
-        greater_is_better=False,
-        push_to_hub=True,
-    )
+    # Load training args from config file if provided
+    training_args_dict = {}
+    if training_args_config is not None and os.path.exists(training_args_config):
+        with open(training_args_config, 'r') as f:
+            training_args_dict = yaml.safe_load(f)
+        print(f"Loaded training args from config: {training_args_config}")
+    # Set/override with function arguments
+    training_args_dict.setdefault('output_dir', checkpoint_dir)
+    training_args_dict.setdefault('per_device_train_batch_size', 16)
+    training_args_dict.setdefault('gradient_accumulation_steps', 1)
+    training_args_dict.setdefault('learning_rate', 1e-5)
+    training_args_dict.setdefault('warmup_steps', 500)
+    training_args_dict.setdefault('max_steps', training_max_steps)
+    training_args_dict.setdefault('gradient_checkpointing', True)
+    training_args_dict.setdefault('fp16', True)
+    training_args_dict.setdefault('eval_strategy', 'steps')
+    training_args_dict.setdefault('per_device_eval_batch_size', 8)
+    training_args_dict.setdefault('predict_with_generate', True)
+    training_args_dict.setdefault('generation_max_length', 225)
+    training_args_dict.setdefault('save_steps', 1000)
+    training_args_dict.setdefault('eval_steps', 1000)
+    training_args_dict.setdefault('logging_steps', 25)
+    training_args_dict.setdefault('report_to', ["tensorboard"])
+    training_args_dict.setdefault('load_best_model_at_end', True)
+    training_args_dict.setdefault('metric_for_best_model', "wer")
+    training_args_dict.setdefault('greater_is_better', False)
+    training_args_dict.setdefault('push_to_hub', True)
+    training_args = Seq2SeqTrainingArguments(**training_args_dict)
     trainer = Seq2SeqTrainer(
         args=training_args,
         model=model,
@@ -212,6 +219,7 @@ def main():
     parser.add_argument("-cd", "--checkpoint-dir", dest="checkpoint_dir", type=str, default=None, help="Checkpoint directory (default: ./checkpoints/<checkpoint_name>)")
     parser.add_argument("-t", "--train-steps", dest="training_max_steps", type=int, default=None, help="Max training steps (default: 4000)")
     parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
+    parser.add_argument("-c","--config", dest='training_args_config', type=str, default='training_args.yaml', help='YAML file with Seq2SeqTrainingArguments config (default: training_args.yaml)')
     args = parser.parse_args()
 
     # Auto-configure defaults as in the notebook
@@ -226,6 +234,7 @@ def main():
     checkpoint_dir = args.checkpoint_dir if args.checkpoint_dir is not None else f"./checkpoints/{checkpoint_name}"
     training_max_steps = args.training_max_steps if args.training_max_steps is not None else 4000
     gpu_device = args.gpu_device
+    training_args_config = args.training_args_config
 
     finetune_whisper(
         dataset_lang=dataset_lang,
@@ -238,7 +247,8 @@ def main():
         checkpoint_name=checkpoint_name,
         checkpoint_dir=checkpoint_dir,
         training_max_steps=training_max_steps,
-        gpu_device=gpu_device
+        gpu_device=gpu_device,
+        training_args_config=training_args_config
     )
 
 if __name__ == "__main__":
