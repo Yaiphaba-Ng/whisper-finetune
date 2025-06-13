@@ -8,6 +8,7 @@ import yaml  # Add at the top with other imports
 parser = argparse.ArgumentParser()
 parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
 parser.add_argument("--hf-token", dest="hf_token", type=str, default=None, help="Hugging Face Hub token (or set HF_TOKEN env var)")
+parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
 args, unknown = parser.parse_known_args()
 
 if args.gpu_device is not None:
@@ -66,7 +67,8 @@ def finetune_whisper(
     checkpoint_dir=None,
     training_max_steps=4000,
     gpu_device=None,
-    training_args_config=None,  # New argument
+    hf_token=None,
+    training_args_dict=None,
     **kwargs
 ):
     # Remove incorrect torch.cuda.set_device usage
@@ -147,12 +149,6 @@ def finetune_whisper(
         label_str = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
         wer = 100 * metric.compute(predictions=pred_str, references=label_str)
         return {"wer": wer}
-    # Load training args from config file if provided
-    training_args_dict = {}
-    if training_args_config is not None and os.path.exists(training_args_config):
-        with open(training_args_config, 'r') as f:
-            training_args_dict = yaml.safe_load(f)
-        print(f"Loaded training args from config: {training_args_config}")
     # Set/override with function arguments
     training_args_dict.setdefault('output_dir', checkpoint_dir)
     training_args_dict.setdefault('per_device_train_batch_size', 16)
@@ -222,19 +218,31 @@ def main():
     parser.add_argument("-c","--config", dest='training_args_config', type=str, default='training_args.yaml', help='YAML file with Seq2SeqTrainingArguments config (default: training_args.yaml)')
     args = parser.parse_args()
 
-    # Auto-configure defaults as in the notebook
-    dataset_lang = args.dataset_lang if args.dataset_lang is not None else "as"
-    dataset_name = args.dataset_name if args.dataset_name is not None else "mozilla-foundation/common_voice_11_0"
-    dataset_cache = args.dataset_cache if args.dataset_cache is not None else "./datasets"
-    model_lang = args.model_lang if args.model_lang is not None else "assamese"
-    model_name = args.model_name if args.model_name is not None else "whisper-medium"
-    model_cache = args.model_cache if args.model_cache is not None else "./models"
-    whisper_pretrained = args.whisper_pretrained if args.whisper_pretrained is not None else f"openai/{model_name}"
-    checkpoint_name = args.checkpoint_name if args.checkpoint_name is not None else f"{model_name}-{model_lang}"
-    checkpoint_dir = args.checkpoint_dir if args.checkpoint_dir is not None else f"./checkpoints/{checkpoint_name}"
-    training_max_steps = args.training_max_steps if args.training_max_steps is not None else 4000
-    gpu_device = args.gpu_device
-    training_args_config = args.training_args_config
+    # Load config.yaml if present
+    config = args.config
+    config_dict = {}
+    if config is not None and os.path.exists(config):
+        with open(config, 'r') as f:
+            config_dict = yaml.safe_load(f)
+        print(f"Loaded all arguments from config: {config}")
+
+    # Use config values as defaults if not set by CLI
+    dataset_lang = args.dataset_lang if args.dataset_lang is not None else config_dict.get('dataset_lang', 'as')
+    dataset_name = args.dataset_name if args.dataset_name is not None else config_dict.get('dataset_name', 'mozilla-foundation/common_voice_11_0')
+    dataset_cache = args.dataset_cache if args.dataset_cache is not None else config_dict.get('dataset_cache', './datasets')
+    model_lang = args.model_lang if args.model_lang is not None else config_dict.get('model_lang', 'assamese')
+    model_name = args.model_name if args.model_name is not None else config_dict.get('model_name', 'whisper-medium')
+    model_cache = args.model_cache if args.model_cache is not None else config_dict.get('model_cache', './models')
+    whisper_pretrained = args.whisper_pretrained if args.whisper_pretrained is not None else config_dict.get('whisper_pretrained', f"openai/{model_name}")
+    checkpoint_name = args.checkpoint_name if args.checkpoint_name is not None else config_dict.get('checkpoint_name', f"{model_name}-{model_lang}")
+    checkpoint_dir = args.checkpoint_dir if args.checkpoint_dir is not None else config_dict.get('checkpoint_dir', f"./checkpoints/{checkpoint_name}")
+    training_max_steps = args.training_max_steps if args.training_max_steps is not None else config_dict.get('training_max_steps', 4000)
+    gpu_device = args.gpu_device if args.gpu_device is not None else config_dict.get('gpu_device', None)
+    hf_token = args.hf_token if args.hf_token is not None else config_dict.get('hf_token', None)
+
+    # Prepare training_args_dict for Seq2SeqTrainingArguments
+    training_args_dict = {k: v for k, v in config_dict.items() if k not in [
+        'dataset_lang','dataset_name','dataset_cache','model_lang','model_name','model_cache','whisper_pretrained','checkpoint_name','checkpoint_dir','training_max_steps','gpu_device','hf_token']}
 
     finetune_whisper(
         dataset_lang=dataset_lang,
@@ -248,7 +256,8 @@ def main():
         checkpoint_dir=checkpoint_dir,
         training_max_steps=training_max_steps,
         gpu_device=gpu_device,
-        training_args_config=training_args_config
+        hf_token=hf_token,
+        training_args_dict=training_args_dict
     )
 
 if __name__ == "__main__":
