@@ -11,7 +11,9 @@ args, unknown = parser.parse_known_args()
 
 if args.gpu_device is not None:
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
-    print(f"Set CUDA_VISIBLE_DEVICES to {args.gpu_device}")
+    print(f"Set CUDA_VISIBLE_DEVICES to {args.gpu_device} (will appear as device 0 in torch)")
+    # Always use device 0 in torch if CUDA_VISIBLE_DEVICES is set
+    torch.cuda.set_device(0)
 
 # Read Hugging Face token from hf_token.txt if not provided
 hf_token = args.hf_token
