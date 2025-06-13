@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import torch
 
 # Early parse for GPU and Hugging Face token
 parser = argparse.ArgumentParser()
