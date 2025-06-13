@@ -11,7 +11,7 @@ whisper_pretrained: null
 checkpoint_name: null
 checkpoint_dir: null
 training_max_steps: 4000
-hf_token: null
+hf_token: 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
 
 # Training arguments
 per_device_train_batch_size: 16

@@ -4,10 +4,9 @@ import argparse
 import torch  # Ensure torch is imported at the top
 import yaml  # Add at the top with other imports
 
-# Early parse for GPU and Hugging Face token
+# Early parse for GPU
 parser = argparse.ArgumentParser()
 parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
-parser.add_argument("--hf-token", dest="hf_token", type=str, default=None, help="Hugging Face Hub token (or set HF_TOKEN env var)")
 parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
 args, unknown = parser.parse_known_args()
 
@@ -17,17 +16,16 @@ if args.gpu_device is not None:
     # Always use device 0 in torch if CUDA_VISIBLE_DEVICES is set
     torch.cuda.set_device(0)
 
-# Read Hugging Face token from hf_token.txt if not provided
-hf_token = args.hf_token
-if hf_token is None:
-    token_path = os.path.join(os.path.dirname(__file__), "hf_token.txt")
-    if os.path.exists(token_path):
-        with open(token_path, "r") as f:
-            hf_token = f.read().strip()
-    else:
-        hf_token = None
-print(f"HF Token: {hf_token}")
+# Load Hugging Face token from config.yaml
+config = args.config
+config_dict = {}
+if config is not None and os.path.exists(config):
+    with open(config, 'r') as f:
+        config_dict = yaml.safe_load(f)
+    print(f"Loaded all arguments from config: {config}")
 
+hf_token = config_dict.get('hf_token', None)
+print(f"HF Token: {hf_token}")
 from huggingface_hub import login
 login(token=hf_token)
 
@@ -170,6 +168,25 @@ def finetune_whisper(
     training_args_dict.setdefault('metric_for_best_model', "wer")
     training_args_dict.setdefault('greater_is_better', False)
     training_args_dict.setdefault('push_to_hub', True)
+    # Type-cast known numeric training arguments to correct types
+    numeric_casts = {
+        'learning_rate': float,
+        'warmup_steps': int,
+        'max_steps': int,
+        'per_device_train_batch_size': int,
+        'gradient_accumulation_steps': int,
+        'per_device_eval_batch_size': int,
+        'generation_max_length': int,
+        'save_steps': int,
+        'eval_steps': int,
+        'logging_steps': int,
+    }
+    for k, cast in numeric_casts.items():
+        if k in training_args_dict and training_args_dict[k] is not None:
+            try:
+                training_args_dict[k] = cast(training_args_dict[k])
+            except Exception:
+                pass  # Leave as is if conversion fails
     training_args = Seq2SeqTrainingArguments(**training_args_dict)
     trainer = Seq2SeqTrainer(
         args=training_args,
@@ -215,10 +232,9 @@ def main():
     parser.add_argument("-cd", "--checkpoint-dir", dest="checkpoint_dir", type=str, default=None, help="Checkpoint directory (default: ./checkpoints/<checkpoint_name>)")
     parser.add_argument("-t", "--train-steps", dest="training_max_steps", type=int, default=None, help="Max training steps (default: 4000)")
     parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
-    parser.add_argument("-c","--config", dest='training_args_config', type=str, default='training_args.yaml', help='YAML file with Seq2SeqTrainingArguments config (default: training_args.yaml)')
+    parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
     args = parser.parse_args()
 
-    # Load config.yaml if present
     config = args.config
     config_dict = {}
     if config is not None and os.path.exists(config):
@@ -238,7 +254,7 @@ def main():
     checkpoint_dir = args.checkpoint_dir if args.checkpoint_dir is not None else config_dict.get('checkpoint_dir', f"./checkpoints/{checkpoint_name}")
     training_max_steps = args.training_max_steps if args.training_max_steps is not None else config_dict.get('training_max_steps', 4000)
     gpu_device = args.gpu_device if args.gpu_device is not None else config_dict.get('gpu_device', None)
-    hf_token = args.hf_token if args.hf_token is not None else config_dict.get('hf_token', None)
+    hf_token = config_dict.get('hf_token', None)
 
     # Prepare training_args_dict for Seq2SeqTrainingArguments
     training_args_dict = {k: v for k, v in config_dict.items() if k not in [
