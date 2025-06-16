@@ -1,18 +1,18 @@
 # Default config for the entire script (rename to config.yaml)
-# Dataset and model arguments
-dataset_lang: as
+# General configuration
+# (Set these to match your dataset and model preferences)
+lang: as  # ISO 639-1/2/3 code for both dataset and model language
 dataset_name: mozilla-foundation/common_voice_11_0
 dataset_cache: ./datasets
-model_lang: assamese
 model_name: whisper-large
 model_cache: ./models
 gpu_device: null
-whisper_pretrained: null
-checkpoint_name: null
-checkpoint_dir: null
+whisper_pretrained: null  # If null, defaults to openai/<model_name>
+checkpoint_name: null     # If null, defaults to <model_name>-<lang>
+checkpoint_dir: null      # If null, defaults to ./checkpoints/<checkpoint_name>
 hf_token: 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
 
-# Training arguments
+# Training arguments (passed to Hugging Face Seq2SeqTrainingArguments)
 per_device_train_batch_size: 16   # Batch size per device for training (Tweak this based on your GPU memory; larger batch sizes may require more memory)
 gradient_accumulation_steps: 1    # Number of steps to accumulate gradients before updating model weights
 learning_rate: 1e-5               # Learning rate for the optimizer
