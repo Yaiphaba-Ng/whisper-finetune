@@ -208,8 +208,8 @@ def finetune_whisper(
         compute_metrics=compute_metrics,
         processing_class=processor.feature_extractor,
     )
-    # Train the model
-    trainer.train()
+    # Train the model, resuming from last checkpoint if available
+    trainer.train(resume_from_checkpoint=True)
     # Evaluate on test set and print final WER
     eval_results = trainer.evaluate()
     print("Training complete. Best model saved at:", training_args.output_dir)
