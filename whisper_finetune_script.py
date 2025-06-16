@@ -45,6 +45,9 @@ class DataCollatorSpeechSeq2SeqWithPadding:
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
         input_features = [{"input_features": feature["input_features"]} for feature in features]
         batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
+        # Ensure attention_mask is set for input_features
+        if "attention_mask" not in batch:
+            batch["attention_mask"] = torch.ones(batch["input_features"].shape[:-1], dtype=torch.long)
         label_features = [{"input_ids": feature["labels"]} for feature in features]
         labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
         labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
@@ -139,9 +142,22 @@ def finetune_whisper(
     common_voice = common_voice.map(prepare_dataset, remove_columns=common_voice.column_names["train"], num_proc=1)
     # Model
     model = WhisperForConditionalGeneration.from_pretrained(whisper_pretrained, cache_dir=model_cache)
+    # Move generation parameters from model.config to model.generation_config to silence warning
+    gen_keys = [
+        'max_length', 'min_length', 'do_sample', 'early_stopping', 'num_beams', 'temperature',
+        'top_k', 'top_p', 'repetition_penalty', 'length_penalty', 'no_repeat_ngram_size',
+        'encoder_no_repeat_ngram_size', 'bad_words_ids', 'num_return_sequences',
+        'forced_bos_token_id', 'forced_eos_token_id', 'remove_invalid_values',
+        'exponential_decay_length_penalty', 'suppress_tokens', 'begin_suppress_tokens'
+    ]
+    for k in gen_keys:
+        if hasattr(model.config, k):
+            setattr(model.generation_config, k, getattr(model.config, k))
+            # Optionally, remove from model.config to avoid confusion
+            # delattr(model.config, k)
     model.generation_config.language = model_lang
     model.generation_config.task = "transcribe"
-    model.generation_config.forced_decoder_ids = None
+    # model.generation_config.forced_decoder_ids = None  # (commented out as per your previous change)
     model.config.use_cache = False  # For gradient checkpointing compatibility
     # Data collator
     data_collator = DataCollatorSpeechSeq2SeqWithPadding(

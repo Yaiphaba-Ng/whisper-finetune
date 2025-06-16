@@ -168,4 +168,24 @@ nohup python whisper_finetune_script.py -g 1 > train.log 2>&1 &
 
 ---
 
+## 9. Troubleshooting: Checkpoint Resume Warnings
+
+- If you see a message like:
+  ```
+  there were missing keys in the checkpoint model loaded: ['proj_out.weight']
+  ```
+  This means the checkpoint does not perfectly match the current model architecture. This can happen if:
+  - You changed the model type, size, or config between runs.
+  - The checkpoint was created with a different code version.
+  - The checkpoint is partially saved or corrupted.
+
+- **What happens?**
+  - Training will continue, and missing weights will be randomly initialized.
+  - If you did not change the model config, you can usually ignore this warning.
+  - If you see unexpected results, start fresh by deleting the checkpoint directory.
+
+- **Best practice:**
+  - Always resume with the same model config and code as the checkpoint was created with.
+  - Double-check your `model_name`, `whisper_pretrained`, and all config values before resuming.
+
 For further customization, see the Hugging Face [Seq2SeqTrainingArguments documentation](https://huggingface.co/docs/transformers/main_classes/trainer#transformers.Seq2SeqTrainingArguments).
