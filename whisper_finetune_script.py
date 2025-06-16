@@ -224,8 +224,22 @@ def finetune_whisper(
         compute_metrics=compute_metrics,
         processing_class=processor.feature_extractor,
     )
-    # Train the model, resuming from last checkpoint if available
-    trainer.train(resume_from_checkpoint=True)
+    # Train the model, resume if checkpoint exists, else start fresh
+    import os
+    checkpoint_dir_to_check = training_args.output_dir
+    checkpoint_found = False
+    if os.path.isdir(checkpoint_dir_to_check):
+        # Look for a subdirectory like checkpoint-xxxx
+        for entry in os.listdir(checkpoint_dir_to_check):
+            if entry.startswith('checkpoint-') and os.path.isdir(os.path.join(checkpoint_dir_to_check, entry)):
+                checkpoint_found = True
+                break
+    if checkpoint_found:
+        print(f"Resuming training from last checkpoint in {checkpoint_dir_to_check}...")
+        trainer.train(resume_from_checkpoint=True)
+    else:
+        print(f"No valid checkpoint found in {checkpoint_dir_to_check}. Starting training from scratch...")
+        trainer.train()
     # Evaluate on test set and print final WER
     eval_results = trainer.evaluate()
     print("Training complete. Best model saved at:", training_args.output_dir)
