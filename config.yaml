@@ -13,23 +13,23 @@ checkpoint_dir: null
 hf_token: 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
 
 # Training arguments
-per_device_train_batch_size: 16
-gradient_accumulation_steps: 1
-learning_rate: 1e-5
-warmup_steps: 500
-max_steps: 4000
-gradient_checkpointing: true
-fp16: true
-eval_strategy: steps
-per_device_eval_batch_size: 8
-predict_with_generate: true
-generation_max_length: 225
-save_steps: 1000
-eval_steps: 1000
-logging_steps: 25
+per_device_train_batch_size: 16   # Batch size per device for training (Tweak this based on your GPU memory; larger batch sizes may require more memory)
+gradient_accumulation_steps: 1    # Number of steps to accumulate gradients before updating model weights
+learning_rate: 1e-5               # Learning rate for the optimizer
+warmup_steps: 500                 # Number of warmup steps for learning rate scheduler
+max_steps: 4000                   # Total number of training steps
+gradient_checkpointing: true      # Enable gradient checkpointing to save memory
+fp16: true                        # Use mixed precision training
+eval_strategy: steps              # Evaluation strategy: 'no', 'epoch', or 'steps'
+per_device_eval_batch_size: 8     # Batch size for evaluation
+predict_with_generate: true       # Use generate method for evaluation
+generation_max_length: 225        # Maximum length for generated sequences
+save_steps: 1000                  # Step interval to save the model
+eval_steps: 1000                  # Step interval to evaluate the model
+logging_steps: 25                 # Step interval to log training metrics
 report_to:
-  - tensorboard
-load_best_model_at_end: true
-metric_for_best_model: wer
-greater_is_better: false
-push_to_hub: true
+  - tensorboard                   # Reporting tools, e.g., 'tensorboard', 'wandb'
+load_best_model_at_end: true      # Load the best model at the end of training
+metric_for_best_model: wer        # Metric to determine the best model
+greater_is_better: false          # Whether a higher metric value is better
+push_to_hub: true                 # Push the model to Hugging Face Hub

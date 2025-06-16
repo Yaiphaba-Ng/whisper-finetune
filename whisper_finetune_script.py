@@ -236,7 +236,7 @@ def finetune_whisper(
         "dataset_tags": f"{dataset_name}",
         "dataset": "Common Voice 11.0",  # a 'pretty' name for the training dataset
         "dataset_args": f"config: {dataset_lang}, split: test",
-        "language": f"{model_lang}",
+        "language": f"{dataset_lang}",  # Use ISO 639-1 code for Hugging Face Hub
         "model_name": f"{checkpoint_name} - Fine-tuned",  # a 'pretty' name for our model
         "finetuned_from": whisper_pretrained,
         "tasks": "automatic-speech-recognition",
