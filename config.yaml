@@ -52,4 +52,4 @@ load_best_model_at_end: true      # Load the best model at the end of training
 metric_for_best_model: wer        # Metric to determine the best model
 greater_is_better: false          # Whether a higher metric value is better
 push_to_hub: true                 # Push the model to Hugging Face Hub
-delay_between_batches_sec: 0   # Delay (in seconds) to wait after each training batch. Set 0 for no delay. Try 5, 10, 30, 60, or 120 for 5s, 10s, 30s, 1min, or 2min delays.
+delay_between_batches_sec: 1      # Delay (in seconds) to wait after each training batch. Set 0 for no delay. Try 0.5, 1, 2 second delays.

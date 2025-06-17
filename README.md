@@ -206,20 +206,20 @@ To help prevent GPU overheating and improve hardware safety during training, the
 Add the following to your `config.yaml`:
 
 ```yaml
-delay_between_batches_sec: 0  # Delay (in seconds) after each training batch. Set 0 for no delay. Try 5, 10, 30, 60, or 120.
+delay_between_batches_sec: 0
 ```
 
 ### Delay Duration Impact Chart
 
 | Delay per batch (sec) | Extra time per 1000 steps |
-|----------------------|---------------------------|
-| 0                    | 0 min                    |
-| 0.5                  | ~8 min                   |
-| 1                    | ~17 min                  |
-| 2                    | ~33 min                  |
-| 3                    | ~50 min                  |
-| 5                    | ~83 min                  |
-| 10                   | ~166 min                 |
+|----------------------|----------------------------|
+| 0                    | 0 min                      |
+| 0.5                  | ~8 min                     |
+| 1                    | ~17 min                    |
+| 2                    | ~33 min                    |
+| 3                    | ~50 min                    |
+| 5                    | ~83 min                    |
+| 10                   | ~166 min                   |
 
 - **Tip:** Start with a very small value (e.g., `0.5` or `1`) and increase only if your GPU is still overheating.
 - The delay is implemented in the training script and will automatically take effect if set in your config.
@@ -235,12 +235,12 @@ To optimize GPU usage and prevent overheating, you can adjust the following two 
 
 Here are some recommended value pairs:
 
-| Batch Size (`per_device_train_batch_size`) | Gradient Accumulation (`gradient_accumulation_steps`) | Effective Batch Size |
-|--------------------------------------------|------------------------------------------------------|---------------------|
-| 8                                          | 2                                                    | 16                  |
-| 4                                          | 4                                                    | 16                  |
-| 2                                          | 8                                                    | 16                  |
-| 1                                          | 16                                                   | 16                  |
+| Batch Size | Gradient Accumulation | Effective Batch Size|
+|------------|-----------------------|---------------------|
+| 8          | 2                     | 16                  |
+| 4          | 4                     | 16                  |
+| 2          | 8                     | 16                  |
+| 1          | 16                    | 16                  |
 
 - **Tip:** Lower batch size reduces GPU memory and heat, but increase `gradient_accumulation_steps` to keep the effective batch size (Batch Size × Accumulation Steps) high for stable training.
 - Adjust these values based on your GPU's memory and temperature limits.
