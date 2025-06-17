@@ -219,6 +219,17 @@ def finetune_whisper(
         compute_metrics=compute_metrics,
         processing_class=processor.feature_extractor,
     )
+    # Custom: Get delay between batches from config (in seconds)
+    delay_between_batches_sec = float(config.get('delay_between_batches_sec', 0))
+    import time
+    # Custom: Patch trainer to add delay after each training step
+    if delay_between_batches_sec > 0:
+        orig_training_step = trainer.training_step
+        def delayed_training_step(*args, **kwargs):
+            result = orig_training_step(*args, **kwargs)
+            time.sleep(delay_between_batches_sec)
+            return result
+        trainer.training_step = delayed_training_step
     # Train the model, resume if checkpoint exists, else start fresh
     import os
     checkpoint_dir_to_check = training_args.output_dir

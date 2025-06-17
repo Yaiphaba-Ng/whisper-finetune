@@ -1,6 +1,25 @@
 # Default config for the entire script (rename to config.yaml)
 # General configuration
 # (Set these to match your dataset and model preferences)
+#
+# ================= GPU Overheating Tips =================
+# - Lower 'per_device_train_batch_size' to reduce GPU load (try 8, 4, or even 2)
+# - Increase 'gradient_accumulation_steps' to keep effective batch size high
+#   (e.g., if you halve batch size, double accumulation steps)
+# - Ensure 'gradient_checkpointing' and 'fp16' are enabled (already set)
+# - Monitor GPU temps with 'nvidia-smi' and keep your system cool
+# - Example configs for lower GPU usage:
+#     per_device_train_batch_size: 8
+#     gradient_accumulation_steps: 2
+#   or
+#     per_device_train_batch_size: 4
+#     gradient_accumulation_steps: 4
+#   or
+#     per_device_train_batch_size: 2
+#     gradient_accumulation_steps: 8
+# - You can add a delay between training batches to further reduce GPU heat.
+#   Set 'delay_between_batches_sec' below (in seconds, e.g., 30 for 30s, 60 for 1min, 120 for 2min).
+# ========================================================
 lang: as  # ISO 639-1/2/3 code for both dataset and model language
 dataset_name: mozilla-foundation/common_voice_11_0
 dataset_cache: ./datasets
@@ -13,15 +32,15 @@ checkpoint_dir: null      # If null, defaults to ./checkpoints/<checkpoint_name>
 hf_token: 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
 
 # Training arguments (passed to Hugging Face Seq2SeqTrainingArguments)
-per_device_train_batch_size: 16   # Batch size per device for training (Tweak this based on your GPU memory; larger batch sizes may require more memory)
-gradient_accumulation_steps: 1    # Number of steps to accumulate gradients before updating model weights
+per_device_train_batch_size: 8    # Batch size per device for training (Try 8, 4, or 2 to reduce GPU load)
+gradient_accumulation_steps: 2    # Number of steps to accumulate gradients before updating model weights (Try 2, 4, or 8 if lowering batch size)
 learning_rate: 1e-5               # Learning rate for the optimizer
 warmup_steps: 500                 # Number of warmup steps for learning rate scheduler
 max_steps: 4000                   # Total number of training steps
 gradient_checkpointing: true      # Enable gradient checkpointing to save memory
 fp16: true                        # Use mixed precision training
 eval_strategy: steps              # Evaluation strategy: 'no', 'epoch', or 'steps'
-per_device_eval_batch_size: 8     # Batch size for evaluation
+per_device_eval_batch_size: 4     # Batch size for evaluation
 predict_with_generate: true       # Use generate method for evaluation
 generation_max_length: 225        # Maximum length for generated sequences
 save_steps: 1000                  # Step interval to save the model
@@ -33,3 +52,4 @@ load_best_model_at_end: true      # Load the best model at the end of training
 metric_for_best_model: wer        # Metric to determine the best model
 greater_is_better: false          # Whether a higher metric value is better
 push_to_hub: true                 # Push the model to Hugging Face Hub
+delay_between_batches_sec: 0   # Delay (in seconds) to wait after each training batch. Set 0 for no delay. Try 5, 10, 30, 60, or 120 for 5s, 10s, 30s, 1min, or 2min delays.

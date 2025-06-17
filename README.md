@@ -189,4 +189,62 @@ nohup python whisper_finetune_script.py -g 1 > train.log 2>&1 &
   - Always resume with the same model config and code as the checkpoint was created with.
   - Double-check your `model_name`, `whisper_pretrained`, and all config values before resuming.
 
+---
+
+## 10. Hardware Optimizations & GPU Overheating Prevention
+
+To help prevent GPU overheating and improve hardware safety during training, the following measures are supported and recommended:
+
+- **Lower the batch size** (`per_device_train_batch_size`) to reduce GPU load.
+- **Increase gradient accumulation steps** (`gradient_accumulation_steps`) to maintain effective batch size.
+- **Enable gradient checkpointing** (`gradient_checkpointing: true`) and **mixed precision** (`fp16: true`).
+- **Add a delay between training batches** using the `delay_between_batches_sec` config argument. This pauses training for a set time (in seconds) after each batch, allowing the GPU to cool down.
+- **Monitor GPU temperature** with tools like `nvidia-smi` and ensure good airflow and cooling.
+
+### Example: Adding Delay Between Batches
+
+Add the following to your `config.yaml`:
+
+```yaml
+delay_between_batches_sec: 0  # Delay (in seconds) after each training batch. Set 0 for no delay. Try 5, 10, 30, 60, or 120.
+```
+
+### Delay Duration Impact Chart
+
+| Delay per batch (sec) | Extra time per 1000 steps |
+|----------------------|---------------------------|
+| 0                    | 0 min                    |
+| 0.5                  | ~8 min                   |
+| 1                    | ~17 min                  |
+| 2                    | ~33 min                  |
+| 3                    | ~50 min                  |
+| 5                    | ~83 min                  |
+| 10                   | ~166 min                 |
+
+- **Tip:** Start with a very small value (e.g., `0.5` or `1`) and increase only if your GPU is still overheating.
+- The delay is implemented in the training script and will automatically take effect if set in your config.
+
+---
+
+### Example Value Pairs for Batch Size and Gradient Accumulation
+
+To optimize GPU usage and prevent overheating, you can adjust the following two parameters in your `config.yaml`:
+
+- `per_device_train_batch_size`: Number of samples processed per device (GPU) in each batch.
+- `gradient_accumulation_steps`: Number of steps to accumulate gradients before updating model weights.
+
+Here are some recommended value pairs:
+
+| Batch Size (`per_device_train_batch_size`) | Gradient Accumulation (`gradient_accumulation_steps`) | Effective Batch Size |
+|--------------------------------------------|------------------------------------------------------|---------------------|
+| 8                                          | 2                                                    | 16                  |
+| 4                                          | 4                                                    | 16                  |
+| 2                                          | 8                                                    | 16                  |
+| 1                                          | 16                                                   | 16                  |
+
+- **Tip:** Lower batch size reduces GPU memory and heat, but increase `gradient_accumulation_steps` to keep the effective batch size (Batch Size × Accumulation Steps) high for stable training.
+- Adjust these values based on your GPU's memory and temperature limits.
+
+---
+
 For further customization, see the Hugging Face [Seq2SeqTrainingArguments documentation](https://huggingface.co/docs/transformers/main_classes/trainer#transformers.Seq2SeqTrainingArguments).
