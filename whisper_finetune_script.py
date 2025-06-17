@@ -209,6 +209,8 @@ def finetune_whisper(
                 training_args_dict[k] = cast(training_args_dict[k])
             except Exception:
                 pass  # Leave as is if conversion fails
+    # Remove custom arguments not supported by Seq2SeqTrainingArguments
+    training_args_dict.pop('delay_between_batches_sec', None)
     training_args = Seq2SeqTrainingArguments(**training_args_dict)
     trainer = Seq2SeqTrainer(
         args=training_args,
