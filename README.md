@@ -34,15 +34,15 @@ All script and training arguments are set in `config.yaml`. Example:
 ```yaml
 # General configuration
 # (Set these to match your dataset and model preferences)
-dataset_lang: as
+# For language codes, see: https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
+lang: as  # ISO 639-1/2/3 code for both dataset and model language
 dataset_name: mozilla-foundation/common_voice_11_0
 dataset_cache: ./datasets
-model_lang: assamese
 model_name: whisper-medium
 model_cache: ./models
 gpu_device: 1
 whisper_pretrained: null  # If null, defaults to openai/<model_name>
-checkpoint_name: null     # If null, defaults to <model_name>-<model_lang>
+checkpoint_name: null     # If null, defaults to <model_name>-<lang>
 checkpoint_dir: null      # If null, defaults to ./checkpoints/<checkpoint_name>
 hf_token: <your_hf_token> # Required: Hugging Face access token
 
@@ -69,22 +69,23 @@ greater_is_better: false
 push_to_hub: true
 ```
 
+> **Note:** For a list of language codes, see: https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
+
 ---
 
 ## 3. Command-Line Arguments
 All arguments can be overridden from the CLI. Example:
 
 ```
-python whisper_finetune_script.py --config config.yaml -g 0 --max-steps 8000 --model-name whisper-large
+python whisper_finetune_script.py --config config.yaml -g 0 --max-steps 8000 --model-name whisper-large --lang as
 ```
 
 **Key CLI arguments:**
 - `--config`: Path to YAML config file (default: `config.yaml`)
 - `-g`, `--gpu`: GPU device id to use (overrides config)
-- `-dl`, `--lang`: Dataset language
+- `-l`, `--lang`: Language code (ISO 639-1/2/3) for both dataset and model (e.g., `as` for Assamese)
 - `-dn`, `--name`: Dataset name
 - `-dc`, `--cache`: Dataset cache directory
-- `-ml`, `--model-lang`: Model language
 - `-mn`, `--model-name`: Model name
 - `-mc`, `--model-cache`: Model cache directory
 - `-wp`, `--whisper-pretrained`: Pretrained model (Hugging Face hub path)
