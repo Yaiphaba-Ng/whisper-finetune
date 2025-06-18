@@ -3,6 +3,7 @@ import sys
 import argparse
 import torch  # Ensure torch is imported at the top
 import yaml  # Add at the top with other imports
+import random  # Added for evaluation sampling
 
 # Early parse for GPU
 parser = argparse.ArgumentParser()
@@ -270,6 +271,55 @@ def finetune_whisper(
     tokenizer.save_pretrained(training_args.output_dir)
     print("Push to hub complete.")
 
+def evaluate_checkpoint(
+    checkpoint_path,
+    dataset_name,
+    lang,
+    dataset_cache,
+    model_cache=None
+):
+    from transformers import WhisperForConditionalGeneration, WhisperProcessor, WhisperFeatureExtractor, WhisperTokenizer
+    import torch
+    from datasets import load_dataset, Audio
+    import evaluate
+    # Load processor, feature extractor, tokenizer, and model
+    processor = WhisperProcessor.from_pretrained(checkpoint_path)
+    feature_extractor = WhisperFeatureExtractor.from_pretrained(checkpoint_path)
+    tokenizer = WhisperTokenizer.from_pretrained(checkpoint_path)
+    model = WhisperForConditionalGeneration.from_pretrained(checkpoint_path)
+    model.eval()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    # Load test set
+    test_set = load_dataset(
+        dataset_name,
+        lang,
+        split="test",
+        cache_dir=dataset_cache,
+        trust_remote_code=True
+    )
+    test_set = test_set.cast_column("audio", Audio(sampling_rate=16000))
+    # Sample 10 random examples
+    samples = random.sample(list(test_set), 10)
+    # Prepare inputs
+    inputs = [feature_extractor(s["audio"]["array"], sampling_rate=16000).input_features[0] for s in samples]
+    input_features = torch.tensor(inputs).unsqueeze(1) if len(inputs[0].shape) == 1 else torch.tensor(inputs)
+    input_features = input_features.to(device)
+    # Generate predictions
+    with torch.no_grad():
+        predicted_ids = model.generate(input_features)
+    pred_str = tokenizer.batch_decode(predicted_ids, skip_special_tokens=True)
+    label_str = [s["sentence"] for s in samples]
+    # Compute WER
+    metric = evaluate.load("wer")
+    wer = 100 * metric.compute(predictions=pred_str, references=label_str)
+    print("\nEvaluation Results (10 random samples):")
+    for i, (ref, hyp) in enumerate(zip(label_str, pred_str)):
+        print(f"Sample {i+1}:")
+        print(f"  Reference: {ref}")
+        print(f"  Prediction: {hyp}")
+    print(f"\nWER on 10 samples: {wer:.2f}%\n")
+
 def main():
     parser = argparse.ArgumentParser(description="Fine-tune Whisper for multilingual ASR")
     parser.add_argument("-l", "--lang", dest="lang", type=str, default=None, help="Language code (ISO 639-1/2/3) for both dataset and model (e.g., 'as' for Assamese)")
@@ -284,6 +334,12 @@ def main():
     parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
     parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
     args = parser.parse_args()
+
+    # Prompt user for mode
+    mode = input("Select mode (train/eval): ").strip().lower()
+    if mode not in ["train", "eval"]:
+        print("Invalid mode. Please select 'train' or 'eval'.")
+        sys.exit(1)
 
     config = args.config
     config_dict = {}
@@ -305,24 +361,34 @@ def main():
     gpu_device = args.gpu_device if args.gpu_device is not None else config_dict.get('gpu_device', None)
     hf_token = config_dict.get('hf_token', None)
 
-    # Prepare training_args_dict for Seq2SeqTrainingArguments
-    training_args_dict = {k: v for k, v in config_dict.items() if k not in [
-        'lang','dataset_name','dataset_cache','model_name','model_cache','whisper_pretrained','checkpoint_name','checkpoint_dir','training_max_steps','gpu_device','hf_token']}
+    if mode == "train":
+        # Prepare training_args_dict for Seq2SeqTrainingArguments
+        training_args_dict = {k: v for k, v in config_dict.items() if k not in [
+            'lang','dataset_name','dataset_cache','model_name','model_cache','whisper_pretrained','checkpoint_name','checkpoint_dir','training_max_steps','gpu_device','hf_token']}
 
-    finetune_whisper(
-        lang=lang,
-        dataset_name=dataset_name,
-        dataset_cache=dataset_cache,
-        model_name=model_name,
-        model_cache=model_cache,
-        whisper_pretrained=whisper_pretrained,
-        checkpoint_name=checkpoint_name,
-        checkpoint_dir=checkpoint_dir,
-        max_steps=max_steps,
-        gpu_device=gpu_device,
-        hf_token=hf_token,
-        training_args_dict=training_args_dict
-    )
+        finetune_whisper(
+            lang=lang,
+            dataset_name=dataset_name,
+            dataset_cache=dataset_cache,
+            model_name=model_name,
+            model_cache=model_cache,
+            whisper_pretrained=whisper_pretrained,
+            checkpoint_name=checkpoint_name,
+            checkpoint_dir=checkpoint_dir,
+            max_steps=max_steps,
+            gpu_device=gpu_device,
+            hf_token=hf_token,
+            training_args_dict=training_args_dict
+        )
+    elif mode == "eval":
+        checkpoint_path = input("Enter checkpoint directory path to evaluate: ").strip()
+        evaluate_checkpoint(
+            checkpoint_path=checkpoint_path,
+            dataset_name=dataset_name,
+            lang=lang,
+            dataset_cache=dataset_cache,
+            model_cache=model_cache
+        )
 
 if __name__ == "__main__":
     main()

@@ -1,29 +1,11 @@
 # Default config for the entire script (rename to config.yaml)
 # General configuration
 # (Set these to match your dataset and model preferences)
-#
-# ================= GPU Overheating Tips =================
-# - Lower 'per_device_train_batch_size' to reduce GPU load (try 8, 4, or even 2)
-# - Increase 'gradient_accumulation_steps' to keep effective batch size high
-#   (e.g., if you halve batch size, double accumulation steps)
-# - Ensure 'gradient_checkpointing' and 'fp16' are enabled (already set)
-# - Monitor GPU temps with 'nvidia-smi' and keep your system cool
-# - Example configs for lower GPU usage:
-#     per_device_train_batch_size: 8
-#     gradient_accumulation_steps: 2
-#   or
-#     per_device_train_batch_size: 4
-#     gradient_accumulation_steps: 4
-#   or
-#     per_device_train_batch_size: 2
-#     gradient_accumulation_steps: 8
-# - You can add a delay between training batches to further reduce GPU heat.
-#   Set 'delay_between_batches_sec' below (in seconds, e.g., 30 for 30s, 60 for 1min, 120 for 2min).
-# ========================================================
+
 lang: as  # ISO 639-1/2/3 code for both dataset and model language
 dataset_name: mozilla-foundation/common_voice_11_0
 dataset_cache: ./datasets
-model_name: whisper-large
+model_name: whisper-medium
 model_cache: ./models
 gpu_device: null
 whisper_pretrained: null  # If null, defaults to openai/<model_name>
