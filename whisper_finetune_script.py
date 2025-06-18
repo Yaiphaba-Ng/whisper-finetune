@@ -4,6 +4,7 @@ import argparse
 import torch  # Ensure torch is imported at the top
 import yaml  # Add at the top with other imports
 import random  # Added for evaluation sampling
+from datetime import datetime
 
 # Early parse for GPU
 parser = argparse.ArgumentParser()
@@ -320,6 +321,18 @@ def evaluate_checkpoint(
         print(f"  Prediction: {hyp}")
     print(f"\nWER on 10 samples: {wer:.2f}%\n")
 
+    # Save results as .tsv in ./evals, recreating checkpoint path structure
+    rel_ckpt_path = os.path.relpath(checkpoint_path, start=os.getcwd())
+    evals_dir = os.path.join("evals", rel_ckpt_path)
+    os.makedirs(evals_dir, exist_ok=True)
+    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    tsv_path = os.path.join(evals_dir, f"eval_{dt_str}.tsv")
+    with open(tsv_path, "w", encoding="utf-8") as f:
+        f.write("id\treference\thypothesis\n")
+        for i, (ref, hyp) in enumerate(zip(label_str, pred_str)):
+            f.write(f"{i}\t{ref}\t{hyp}\n")
+    print(f"Evaluation log saved to: {tsv_path}")
+
 def main():
     parser = argparse.ArgumentParser(description="Fine-tune Whisper for multilingual ASR")
     parser.add_argument("-l", "--lang", dest="lang", type=str, default=None, help="Language code (ISO 639-1/2/3) for both dataset and model (e.g., 'as' for Assamese)")
@@ -333,10 +346,15 @@ def main():
     parser.add_argument('-t', '--max-steps', dest='max_steps', type=int, default=None, help='Max training steps (default: 4000)')
     parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
     parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
+    parser.add_argument('-E', '--eval', dest='eval_mode', action='store_true', help='Run in evaluation mode')
+    parser.add_argument('-ch', '--checkpoint', dest='eval_checkpoint', type=str, default=None, help='Checkpoint directory path for evaluation')
     args = parser.parse_args()
 
-    # Prompt user for mode
-    mode = input("Select mode (train/eval): ").strip().lower()
+    # Determine mode
+    if args.eval_mode:
+        mode = "eval"
+    else:
+        mode = input("Select mode (train/eval): ").strip().lower()
     if mode not in ["train", "eval"]:
         print("Invalid mode. Please select 'train' or 'eval'.")
         sys.exit(1)
@@ -381,7 +399,7 @@ def main():
             training_args_dict=training_args_dict
         )
     elif mode == "eval":
-        checkpoint_path = input("Enter checkpoint directory path to evaluate: ").strip()
+        checkpoint_path = args.eval_checkpoint if args.eval_checkpoint else input("Enter checkpoint directory path to evaluate: ").strip()
         evaluate_checkpoint(
             checkpoint_path=checkpoint_path,
             dataset_name=dataset_name,
