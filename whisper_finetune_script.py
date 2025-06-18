@@ -5,6 +5,7 @@ import torch  # Ensure torch is imported at the top
 import yaml  # Add at the top with other imports
 import random  # Added for evaluation sampling
 from datetime import datetime
+import json
 
 # Early parse for GPU
 parser = argparse.ArgumentParser()
@@ -277,17 +278,24 @@ def evaluate_checkpoint(
     dataset_name,
     lang,
     dataset_cache,
-    model_cache=None
+    model_cache=None,
+    is_pretrained=False
 ):
     from transformers import WhisperForConditionalGeneration, WhisperProcessor, WhisperFeatureExtractor, WhisperTokenizer
     import torch
     from datasets import load_dataset, Audio
     import evaluate
     # Load processor, feature extractor, tokenizer, and model
-    processor = WhisperProcessor.from_pretrained(checkpoint_path)
-    feature_extractor = WhisperFeatureExtractor.from_pretrained(checkpoint_path)
-    tokenizer = WhisperTokenizer.from_pretrained(checkpoint_path)
-    model = WhisperForConditionalGeneration.from_pretrained(checkpoint_path)
+    if is_pretrained:
+        processor = WhisperProcessor.from_pretrained(checkpoint_path, language=lang, task="transcribe")
+        feature_extractor = WhisperFeatureExtractor.from_pretrained(checkpoint_path)
+        tokenizer = WhisperTokenizer.from_pretrained(checkpoint_path, language=lang, task="transcribe")
+        model = WhisperForConditionalGeneration.from_pretrained(checkpoint_path)
+    else:
+        processor = WhisperProcessor.from_pretrained(checkpoint_path)
+        feature_extractor = WhisperFeatureExtractor.from_pretrained(checkpoint_path)
+        tokenizer = WhisperTokenizer.from_pretrained(checkpoint_path)
+        model = WhisperForConditionalGeneration.from_pretrained(checkpoint_path)
     model.eval()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -300,8 +308,17 @@ def evaluate_checkpoint(
         trust_remote_code=True
     )
     test_set = test_set.cast_column("audio", Audio(sampling_rate=16000))
-    # Sample 10 random examples
-    samples = random.sample(list(test_set), 10)
+    # Ask for eval mode
+    print("Select evaluation mode:")
+    print("1. Complete test set (all samples)")
+    print("2. 10 random samples")
+    eval_mode = input("Enter 1 or 2: ").strip()
+    if eval_mode == "1":
+        samples = list(test_set)
+        eval_mode_str = "all"
+    else:
+        samples = random.sample(list(test_set), 10)
+        eval_mode_str = "10_samples"
     # Prepare inputs
     inputs = [feature_extractor(s["audio"]["array"], sampling_rate=16000).input_features[0] for s in samples]
     input_features = torch.tensor(inputs).unsqueeze(1) if len(inputs[0].shape) == 1 else torch.tensor(inputs)
@@ -311,27 +328,47 @@ def evaluate_checkpoint(
         predicted_ids = model.generate(input_features)
     pred_str = tokenizer.batch_decode(predicted_ids, skip_special_tokens=True)
     label_str = [s["sentence"] for s in samples]
+    # Only use the filename, not the absolute path
+    file_paths = [os.path.basename(s["audio"]["path"]) if "path" in s["audio"] else "" for s in samples]
     # Compute WER
     metric = evaluate.load("wer")
     wer = 100 * metric.compute(predictions=pred_str, references=label_str)
-    print("\nEvaluation Results (10 random samples):")
-    for i, (ref, hyp) in enumerate(zip(label_str, pred_str)):
-        print(f"Sample {i+1}:")
-        print(f"  Reference: {ref}")
-        print(f"  Prediction: {hyp}")
-    print(f"\nWER on 10 samples: {wer:.2f}%\n")
-
+    print(f"\nWER: {wer:.2f}%\n")
     # Save results as .tsv in ./evals, recreating checkpoint path structure
-    rel_ckpt_path = os.path.relpath(checkpoint_path, start=os.getcwd())
-    evals_dir = os.path.join("evals", rel_ckpt_path)
+    if is_pretrained:
+        model_name_for_dir = checkpoint_path.replace('/', '_')
+        evals_dir = os.path.join("evals", "pretrained", model_name_for_dir)
+    else:
+        rel_ckpt_path = os.path.relpath(checkpoint_path, start=os.getcwd())
+        evals_dir = os.path.join("evals", rel_ckpt_path)
     os.makedirs(evals_dir, exist_ok=True)
     dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     tsv_path = os.path.join(evals_dir, f"eval_{dt_str}.tsv")
+    json_path = os.path.join(evals_dir, f"eval_{dt_str}.json")
     with open(tsv_path, "w", encoding="utf-8") as f:
-        f.write("id\treference\thypothesis\n")
-        for i, (ref, hyp) in enumerate(zip(label_str, pred_str)):
-            f.write(f"{i}\t{ref}\t{hyp}\n")
-    print(f"Evaluation log saved to: {tsv_path}")
+        f.write("path\treference\thypothesis\n")
+        for p, ref, hyp in zip(file_paths, label_str, pred_str):
+            f.write(f"{p}\t{ref}\t{hyp}\n")
+    # Collect config for JSON
+    eval_config = {
+        "datetime": dt_str,
+        "wer": wer,
+        "eval_mode": eval_mode_str,
+        "model_name": checkpoint_path if is_pretrained else None,
+        "checkpoint_path": None if is_pretrained else checkpoint_path,
+        "language": lang,
+        "dataset_name": dataset_name,
+        "num_samples": len(samples),
+        "tsv_path": tsv_path,
+        "parameters": {
+            "is_pretrained": is_pretrained,
+            "model_cache": model_cache,
+            "dataset_cache": dataset_cache
+        }
+    }
+    with open(json_path, "w", encoding="utf-8") as jf:
+        json.dump(eval_config, jf, indent=2)
+    print(f"Evaluation log saved to: {tsv_path}\nConfig saved to: {json_path}")
 
 def main():
     parser = argparse.ArgumentParser(description="Fine-tune Whisper for multilingual ASR")
@@ -348,6 +385,7 @@ def main():
     parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
     parser.add_argument('-E', '--eval', dest='eval_mode', action='store_true', help='Run in evaluation mode')
     parser.add_argument('-ch', '--checkpoint', dest='eval_checkpoint', type=str, default=None, help='Checkpoint directory path for evaluation')
+    parser.add_argument('-pt', '--pretrained', dest='pretrained_model', type=str, default=None, help='HuggingFace model name to evaluate (e.g., openai/whisper-medium)')
     args = parser.parse_args()
 
     # Determine mode
@@ -399,14 +437,42 @@ def main():
             training_args_dict=training_args_dict
         )
     elif mode == "eval":
-        checkpoint_path = args.eval_checkpoint if args.eval_checkpoint else input("Enter checkpoint directory path to evaluate: ").strip()
-        evaluate_checkpoint(
-            checkpoint_path=checkpoint_path,
-            dataset_name=dataset_name,
-            lang=lang,
-            dataset_cache=dataset_cache,
-            model_cache=model_cache
-        )
+        if args.pretrained_model:
+            # Evaluate HuggingFace pretrained model
+            pretrained_name = args.pretrained_model
+            print(f"Evaluating HuggingFace pretrained model: {pretrained_name}")
+            evaluate_checkpoint(
+                checkpoint_path=pretrained_name,
+                dataset_name=dataset_name,
+                lang=lang,
+                dataset_cache=dataset_cache,
+                model_cache=model_cache,
+                is_pretrained=True
+            )
+        elif not args.eval_checkpoint and not args.pretrained_model:
+            # If -E is passed without -ch or -pt, resolve whisper_pretrained as openai/<model_name> if not set
+            if config_dict.get('whisper_pretrained'):
+                pretrained_name = config_dict['whisper_pretrained']
+            else:
+                pretrained_name = f"openai/{model_name}"
+            print(f"Evaluating resolved whisper_pretrained model: {pretrained_name}")
+            evaluate_checkpoint(
+                checkpoint_path=pretrained_name,
+                dataset_name=dataset_name,
+                lang=lang,
+                dataset_cache=dataset_cache,
+                model_cache=model_cache,
+                is_pretrained=True
+            )
+        else:
+            checkpoint_path = args.eval_checkpoint if args.eval_checkpoint else input("Enter checkpoint directory path to evaluate: ").strip()
+            evaluate_checkpoint(
+                checkpoint_path=checkpoint_path,
+                dataset_name=dataset_name,
+                lang=lang,
+                dataset_cache=dataset_cache,
+                model_cache=model_cache
+            )
 
 if __name__ == "__main__":
     main()
