@@ -1,0 +1,16 @@
+{
+  "datetime": "20250618_165443",
+  "wer": 103.48837209302326,
+  "eval_mode": "10_samples",
+  "model_name": "openai/whisper-medium",
+  "checkpoint_path": null,
+  "language": "as",
+  "dataset_name": "mozilla-foundation/common_voice_11_0",
+  "num_samples": 10,
+  "tsv_path": "evals/pretrained/openai_whisper-medium/eval_20250618_165443.tsv",
+  "parameters": {
+    "is_pretrained": true,
+    "model_cache": "./models",
+    "dataset_cache": "./datasets"
+  }
+}
