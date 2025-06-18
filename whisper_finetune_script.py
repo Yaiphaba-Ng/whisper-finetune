@@ -266,6 +266,8 @@ def finetune_whisper(
     print("Pushing model and processor to the Hugging Face Hub...")
     trainer.push_to_hub(**push_kwargs)
     processor.save_pretrained(training_args.output_dir)
+    feature_extractor.save_pretrained(training_args.output_dir)
+    tokenizer.save_pretrained(training_args.output_dir)
     print("Push to hub complete.")
 
 def main():
