@@ -1,0 +1,10 @@
+{
+  "wer": 46.808510638297875,
+  "language": "as",
+  "eval_mode": "10_samples",
+  "dataset_name": "mozilla-foundation/common_voice_11_0",
+  "model_name": null,
+  "checkpoint_path": "checkpoints\\whisper-medium-as\\checkpoint-1000",
+  "num_samples": 10,
+  "datetime": "20250619_135140"
+}
