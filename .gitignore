@@ -11,6 +11,7 @@ wheels/
 datasets/
 models/
 evals/as_test/
-/checkpoints/
+checkpoints/whisper-medium-as/*
+!checkpoints/whisper-medium-as/checkpoint-1000
 Checkpoint Files/
 .gradio/
