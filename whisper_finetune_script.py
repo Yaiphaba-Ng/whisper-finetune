@@ -6,6 +6,7 @@ import yaml  # Add at the top with other imports
 import random  # Added for evaluation sampling
 from datetime import datetime
 import json
+import gradio as gr
 
 # Early parse for GPU
 parser = argparse.ArgumentParser()
@@ -312,13 +313,25 @@ def evaluate_checkpoint(
     print("Select evaluation mode:")
     print("1. Complete test set (all samples)")
     print("2. 10 random samples")
-    eval_mode = input("Enter 1 or 2: ").strip()
+    print("3. Gradio ASR demo (interactive UI)")
+    eval_mode = input("Enter 1, 2, or 3: ").strip()
     if eval_mode == "1":
         samples = list(test_set)
         eval_mode_str = "all"
-    else:
+    elif eval_mode == "2":
         samples = random.sample(list(test_set), 10)
         eval_mode_str = "10_samples"
+    elif eval_mode == "3":
+        gradio_transcribe_interface(
+            checkpoint_path=checkpoint_path,
+            lang=lang,
+            model_cache=model_cache,
+            is_pretrained=is_pretrained
+        )
+        return
+    else:
+        print("Invalid selection.")
+        return
     # Prepare inputs
     inputs = [feature_extractor(s["audio"]["array"], sampling_rate=16000).input_features[0] for s in samples]
     input_features = torch.tensor(inputs).unsqueeze(1) if len(inputs[0].shape) == 1 else torch.tensor(inputs)
@@ -351,24 +364,84 @@ def evaluate_checkpoint(
             f.write(f"{p}\t{ref}\t{hyp}\n")
     # Collect config for JSON
     eval_config = {
-        "datetime": dt_str,
         "wer": wer,
+        "language": lang,
         "eval_mode": eval_mode_str,
+        "dataset_name": dataset_name,
         "model_name": checkpoint_path if is_pretrained else None,
         "checkpoint_path": None if is_pretrained else checkpoint_path,
-        "language": lang,
-        "dataset_name": dataset_name,
         "num_samples": len(samples),
-        "tsv_path": tsv_path,
-        "parameters": {
-            "is_pretrained": is_pretrained,
-            "model_cache": model_cache,
-            "dataset_cache": dataset_cache
-        }
+        "datetime": dt_str,
     }
     with open(json_path, "w", encoding="utf-8") as jf:
         json.dump(eval_config, jf, indent=2)
     print(f"Evaluation log saved to: {tsv_path}\nConfig saved to: {json_path}")
+
+def gradio_transcribe_interface(
+    checkpoint_path,
+    lang,
+    model_cache=None,
+    is_pretrained=False
+):
+    from transformers import WhisperForConditionalGeneration, WhisperProcessor
+    import torch
+    import evaluate
+    import numpy as np
+    # Load processor and model
+    processor = WhisperProcessor.from_pretrained(checkpoint_path)
+    model = WhisperForConditionalGeneration.from_pretrained(checkpoint_path)
+    model.eval()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    metric = evaluate.load("wer")
+    def transcribe_and_score(audio, reference_text):
+        if audio is None:
+            return "No audio provided.", "-"
+        # Gradio provides audio as (sr, np.ndarray)
+        if isinstance(audio, tuple):
+            sr, audio_np = audio
+        else:
+            audio_np = audio
+            sr = 16000
+        # Convert to mono if stereo
+        if len(audio_np.shape) > 1:
+            audio_np = np.mean(audio_np, axis=1)
+        # Convert to float32 if not already
+        if not np.issubdtype(audio_np.dtype, np.floating):
+            # If int16, scale to [-1, 1]
+            if audio_np.dtype == np.int16:
+                audio_np = audio_np.astype(np.float32) / 32768.0
+            else:
+                audio_np = audio_np.astype(np.float32)
+        # Resample if needed
+        if sr != 16000:
+            import librosa
+            audio_np = librosa.resample(audio_np, orig_sr=sr, target_sr=16000)
+            sr = 16000
+        inputs = processor(audio_np, sampling_rate=sr, return_tensors="pt")
+        input_features = inputs.input_features.to(device)
+        with torch.no_grad():
+            predicted_ids = model.generate(input_features, task="transcribe", language=lang)
+        transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+        if reference_text and reference_text.strip():
+            wer = 100 * metric.compute(predictions=[transcription], references=[reference_text.strip()])
+            return transcription, f"{wer:.2f}%"
+        else:
+            return transcription, "-"
+    demo = gr.Interface(
+        fn=transcribe_and_score,
+        inputs=[
+            gr.Audio(sources=["upload", "microphone"], type="numpy", label="Audio (upload or record)"),
+            gr.Textbox(lines=2, label="Reference Text (optional)", placeholder="Paste ground truth here if you want WER computed")
+        ],
+        outputs=[
+            gr.Textbox(label="Transcription"),
+            gr.Textbox(label="WER")
+        ],
+        title="Whisper ASR Evaluation",
+        description="Upload or record an audio file. Optionally, provide the ground truth text to compute WER."
+    )
+    demo.launch()
 
 def main():
     parser = argparse.ArgumentParser(description="Fine-tune Whisper for multilingual ASR")
@@ -386,6 +459,7 @@ def main():
     parser.add_argument('-E', '--eval', dest='eval_mode', action='store_true', help='Run in evaluation mode')
     parser.add_argument('-ch', '--checkpoint', dest='eval_checkpoint', type=str, default=None, help='Checkpoint directory path for evaluation')
     parser.add_argument('-pt', '--pretrained', dest='pretrained_model', type=str, default=None, help='HuggingFace model name to evaluate (e.g., openai/whisper-medium)')
+    parser.add_argument('--gradio', dest='gradio_mode', action='store_true', help='Launch Gradio ASR demo')
     args = parser.parse_args()
 
     # Determine mode
@@ -393,7 +467,7 @@ def main():
         mode = "eval"
     else:
         mode = input("Select mode (train/eval): ").strip().lower()
-    if mode not in ["train", "eval"]:
+    if mode not in ["train", "eval", "gradio"]:
         print("Invalid mode. Please select 'train' or 'eval'.")
         sys.exit(1)
 
@@ -473,6 +547,15 @@ def main():
                 dataset_cache=dataset_cache,
                 model_cache=model_cache
             )
+    elif mode == "gradio" or args.gradio_mode:
+        checkpoint_path = args.eval_checkpoint if args.eval_checkpoint else checkpoint_dir
+        gradio_transcribe_interface(
+            checkpoint_path=checkpoint_path,
+            lang=lang,
+            model_cache=model_cache,
+            is_pretrained=False
+        )
+        return
 
 if __name__ == "__main__":
     main()
