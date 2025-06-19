@@ -15,3 +15,5 @@ checkpoints/whisper-medium-as/*
 !checkpoints/whisper-medium-as/checkpoint-1000
 Checkpoint Files/
 .gradio/
+checkpoints/whisper-medium-as/checkpoint-1000/optimizer.pt
+checkpoints/whisper-medium-as/checkpoint-1000/model.safetensors
