@@ -106,39 +106,71 @@ def finetune_whisper(
     gpu_device = config.get('gpu_device')
     hf_token = config.get('hf_token')
 
-    # Load dataset
-    common_voice = DatasetDict()
-    common_voice["train"] = load_dataset(
-        dataset_name,
-        lang,
-        split="train+validation",
-        cache_dir=dataset_cache,
-        trust_remote_code=True
-    )
-    common_voice["test"] = load_dataset(
-        dataset_name,
-        lang,
-        split="test",
-        cache_dir=dataset_cache,
-        trust_remote_code=True
-    )
-    # Remove extra columns
-    common_voice = common_voice.remove_columns([
-        "accent", "age", "client_id", "down_votes", "gender", "locale", "path", "segment", "up_votes"
-    ])
-    # Feature extractor, tokenizer, processor
+    # Feature extractor, tokenizer, processor (must be defined before dataset mapping)
     feature_extractor = WhisperFeatureExtractor.from_pretrained(whisper_pretrained, cache_dir=model_cache)
     tokenizer = WhisperTokenizer.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
     processor = WhisperProcessor.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
-    # Resample audio
-    common_voice = common_voice.cast_column("audio", Audio(sampling_rate=16000))
-    # Prepare dataset
-    def prepare_dataset(batch):
-        audio = batch["audio"]
-        batch["input_features"] = feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"]).input_features[0]
-        batch["labels"] = tokenizer(batch["sentence"]).input_ids
-        return batch
-    common_voice = common_voice.map(prepare_dataset, remove_columns=common_voice.column_names["train"], num_proc=1)
+    # --- Dataset selection logic: Common Voice vs FLEURS ---
+    indic_langs = {  # ISO 639-1 codes for major Indic languages
+        'as', 'bn', 'gu', 'hi', 'kn', 'ks', 'ml', 'mr', 'ne', 'or', 'pa', 'sa', 'sd', 'ta', 'te', 'ur',
+        'mai', 'gom', 'doi', 'bho', 'brx', 'sat', 'mni', 'kok', 'lus', 'kha', 'new', 'raj', 'mag', 'hne', 'lep', 'bpy', 'wbq', 'unr', 'sck', 'gbm', 'awa', 'bhb', 'bhi', 'bjj', 'bns', 'bpy', 'bto', 'ccp', 'chh', 'hne', 'hoc', 'khn', 'kru', 'mwr', 'noe', 'ory', 'pan', 'pnb', 'raj', 'rjs', 'sck', 'snd', 'unr', 'wbr'
+    }
+    is_fleurs = 'fleurs' in (dataset_name or '').lower()
+    fleurs_lang = lang
+    if is_fleurs and lang in indic_langs and not lang.endswith('_in'):
+        fleurs_lang = f"{lang}_in"
+    # Load dataset accordingly
+    if is_fleurs:
+        dataset = DatasetDict()
+        dataset["train"] = load_dataset(
+            dataset_name,
+            fleurs_lang,
+            split="train+validation",
+            cache_dir=dataset_cache,
+            trust_remote_code=True
+        )
+        dataset["test"] = load_dataset(
+            dataset_name,
+            fleurs_lang,
+            split="test",
+            cache_dir=dataset_cache,
+            trust_remote_code=True
+        )
+        # FLEURS: columns are 'audio' (wav) and 'transcription'
+        def prepare_fleurs(batch):
+            audio = batch["audio"]
+            batch["input_features"] = feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"]).input_features[0]
+            batch["labels"] = tokenizer(batch["transcription"]).input_ids
+            return batch
+        dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+        dataset = dataset.map(prepare_fleurs, remove_columns=dataset["train"].column_names, num_proc=1)
+    else:
+        dataset = DatasetDict()
+        dataset["train"] = load_dataset(
+            dataset_name,
+            lang,
+            split="train+validation",
+            cache_dir=dataset_cache,
+            trust_remote_code=True
+        )
+        dataset["test"] = load_dataset(
+            dataset_name,
+            lang,
+            split="test",
+            cache_dir=dataset_cache,
+            trust_remote_code=True
+        )
+        # Remove extra columns for Common Voice
+        dataset = dataset.remove_columns([
+            "accent", "age", "client_id", "down_votes", "gender", "locale", "path", "segment", "up_votes"
+        ])
+        def prepare_common_voice(batch):
+            audio = batch["audio"]
+            batch["input_features"] = feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"]).input_features[0]
+            batch["labels"] = tokenizer(batch["sentence"]).input_ids
+            return batch
+        dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+        dataset = dataset.map(prepare_common_voice, remove_columns=dataset["train"].column_names, num_proc=1)
     # Model
     model = WhisperForConditionalGeneration.from_pretrained(whisper_pretrained, cache_dir=model_cache)
     # Move generation parameters from model.config to model.generation_config to silence warning
@@ -219,8 +251,8 @@ def finetune_whisper(
     trainer = Seq2SeqTrainer(
         args=training_args,
         model=model,
-        train_dataset=common_voice["train"],
-        eval_dataset=common_voice["test"],
+        train_dataset=dataset["train"],
+        eval_dataset=dataset["test"],
         data_collator=data_collator,
         compute_metrics=compute_metrics,
         processing_class=processor.feature_extractor,
