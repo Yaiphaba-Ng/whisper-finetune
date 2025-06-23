@@ -267,6 +267,7 @@ def finetune_whisper(
                 pass  # Leave as is if conversion fails
     # Remove custom arguments not supported by Seq2SeqTrainingArguments
     training_args_dict.pop('delay_between_batches_sec', None)
+    training_args_dict.pop('cpu_only', None)
     training_args = Seq2SeqTrainingArguments(**training_args_dict)
     trainer = Seq2SeqTrainer(
         args=training_args,
