@@ -9,6 +9,7 @@ cpu_only: true                    # Force CPU-only mode (overrides GPU selection
 whisper_pretrained: null          # If null, defaults to openai/<model_name>
 checkpoint_name: null             # If null, defaults to <dataset_short>_<model_name>-<lang> where dataset_short is 'fleurs', 'commonvoice', or 'custom'
 checkpoint_dir: null              # If null, defaults to ./checkpoints/<checkpoint_name>
+local_dataset_path: datasets\as_in.tar          # Path to local dataset archive (.tar) or extracted folder (overrides remote download)
 
 # Training arguments (passed to Hugging Face Seq2SeqTrainingArguments)
 per_device_train_batch_size: 4    # Batch size per device for training (Try 8, 4, or 2 to reduce GPU load)

@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
 parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
 parser.add_argument("-c", '--cpu-only', dest='cpu_only', action='store_true', help='Force CPU-only mode (overrides GPU selection)')
+parser.add_argument('--local-dataset-path', dest='local_dataset_path', type=str, default=None, help='Path to local dataset archive (.tar) or extracted folder (overrides remote download)')
 args, unknown = parser.parse_known_args()
 
 # CPU-only logic (CLI overrides config)
@@ -72,6 +73,7 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 
 def finetune_whisper(
     training_args_dict=None,
+    local_dataset_path=None,
     **kwargs
 ):
     # Unpack all config values from training_args_dict and kwargs
@@ -141,30 +143,106 @@ def finetune_whisper(
     if is_fleurs and lang in indic_langs and not lang.endswith('_in'):
         fleurs_lang = f"{lang}_in"
     # Load dataset accordingly
-    if is_fleurs:
-        dataset = DatasetDict()
-        dataset["train"] = load_dataset(
-            dataset_name,
-            fleurs_lang,
-            split="train+validation",
-            cache_dir=dataset_cache,
-            trust_remote_code=True
-        )
-        dataset["test"] = load_dataset(
-            dataset_name,
-            fleurs_lang,
-            split="test",
-            cache_dir=dataset_cache,
-            trust_remote_code=True
-        )
+    if local_dataset_path:
+        # Local loading logic
+        print(f"Loading dataset from local path: {local_dataset_path}")
+        if os.path.isdir(local_dataset_path):
+            # Extracted folder
+            if is_fleurs:
+                dataset = DatasetDict()
+                dataset["train"] = load_dataset(
+                    dataset_name,
+                    fleurs_lang,
+                    split="train+validation",
+                    data_dir=local_dataset_path,
+                    cache_dir=dataset_cache,
+                    trust_remote_code=True
+                )
+                dataset["test"] = load_dataset(
+                    dataset_name,
+                    fleurs_lang,
+                    split="test",
+                    data_dir=local_dataset_path,
+                    cache_dir=dataset_cache,
+                    trust_remote_code=True
+                )
+            else:
+                dataset = DatasetDict()
+                dataset["train"] = load_dataset(
+                    dataset_name,
+                    lang,
+                    split="train+validation",
+                    data_dir=local_dataset_path,
+                    cache_dir=dataset_cache,
+                    trust_remote_code=True
+                )
+                dataset["test"] = load_dataset(
+                    dataset_name,
+                    lang,
+                    split="test",
+                    data_dir=local_dataset_path,
+                    cache_dir=dataset_cache,
+                    trust_remote_code=True
+                )
+        else:
+            # Assume it's a .tar or .zip file
+            if is_fleurs:
+                dataset = DatasetDict()
+                dataset["train"] = load_dataset(
+                    dataset_name,
+                    fleurs_lang,
+                    split="train+validation",
+                    data_files=local_dataset_path,
+                    cache_dir=dataset_cache,
+                    trust_remote_code=True
+                )
+                dataset["test"] = load_dataset(
+                    dataset_name,
+                    fleurs_lang,
+                    split="test",
+                    data_files=local_dataset_path,
+                    cache_dir=dataset_cache,
+                    trust_remote_code=True
+                )
+            else:
+                dataset = DatasetDict()
+                dataset["train"] = load_dataset(
+                    dataset_name,
+                    lang,
+                    split="train+validation",
+                    data_files=local_dataset_path,
+                    cache_dir=dataset_cache,
+                    trust_remote_code=True
+                )
+                dataset["test"] = load_dataset(
+                    dataset_name,
+                    lang,
+                    split="test",
+                    data_files=local_dataset_path,
+                    cache_dir=dataset_cache,
+                    trust_remote_code=True
+                )
         # FLEURS: columns are 'audio' (wav) and 'transcription'
-        def prepare_fleurs(batch):
-            audio = batch["audio"]
-            batch["input_features"] = feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"]).input_features[0]
-            batch["labels"] = tokenizer(batch["transcription"]).input_ids
-            return batch
-        dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
-        dataset = dataset.map(prepare_fleurs, remove_columns=dataset["train"].column_names, num_proc=1)
+        if is_fleurs:
+            def prepare_fleurs(batch):
+                audio = batch["audio"]
+                batch["input_features"] = feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"]).input_features[0]
+                batch["labels"] = tokenizer(batch["transcription"]).input_ids
+                return batch
+            dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+            dataset = dataset.map(prepare_fleurs, remove_columns=dataset["train"].column_names, num_proc=1)
+        else:
+            # Remove extra columns for Common Voice
+            dataset = dataset.remove_columns([
+                "accent", "age", "client_id", "down_votes", "gender", "locale", "path", "segment", "up_votes"
+            ])
+            def prepare_common_voice(batch):
+                audio = batch["audio"]
+                batch["input_features"] = feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"]).input_features[0]
+                batch["labels"] = tokenizer(batch["sentence"]).input_ids
+                return batch
+            dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
+            dataset = dataset.map(prepare_common_voice, remove_columns=dataset["train"].column_names, num_proc=1)
     else:
         dataset = DatasetDict()
         dataset["train"] = load_dataset(
@@ -542,6 +620,7 @@ def main():
     model_name = args.model_name if args.model_name is not None else config_dict.get('model_name', 'whisper-medium')
     model_cache = args.model_cache if args.model_cache is not None else config_dict.get('model_cache', './models')
     whisper_pretrained = args.whisper_pretrained if args.whisper_pretrained is not None else config_dict.get('whisper_pretrained', f"openai/{model_name}")
+    local_dataset_path = args.local_dataset_path if args.local_dataset_path is not None else config_dict.get('local_dataset_path', None)
 
     # --- Dataset short name logic for checkpoint naming ---
     def get_dataset_short_name(ds_name):
@@ -574,6 +653,7 @@ def main():
             checkpoint_dir=checkpoint_dir,
             max_steps=max_steps,
             gpu_device=gpu_device,
+            local_dataset_path=local_dataset_path,
             training_args_dict=training_args_dict
         )
     elif mode == "eval":
