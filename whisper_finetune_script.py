@@ -470,8 +470,8 @@ def gradio_transcribe_interface(
             gr.Textbox(label="Transcription"),
             gr.Textbox(label="WER")
         ],
-        title="Whisper ASR Evaluation",
-        description="Upload or record an audio file. Optionally, provide the ground truth text to compute WER."
+        title="Whisper Fine-tuned in Assamese",
+        description="Upload or record an audio file."
     )
     demo.launch()
 
