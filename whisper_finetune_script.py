@@ -13,13 +13,24 @@ from dotenv import load_dotenv  # Add dotenv import
 parser = argparse.ArgumentParser()
 parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
 parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
+parser.add_argument("-c", '--cpu-only', dest='cpu_only', action='store_true', help='Force CPU-only mode (overrides GPU selection)')
 args, unknown = parser.parse_known_args()
 
-if args.gpu_device is not None:
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
-    print(f"Set CUDA_VISIBLE_DEVICES to {args.gpu_device} (will appear as device 0 in torch)")
-    # Always use device 0 in torch if CUDA_VISIBLE_DEVICES is set
-    torch.cuda.set_device(0)
+# CPU-only logic (CLI overrides config)
+cpu_only = args.cpu_only
+if not cpu_only and os.path.exists(args.config):
+    with open(args.config, 'r') as f:
+        _cfg = yaml.safe_load(f)
+        cpu_only = _cfg.get('cpu_only', False)
+if cpu_only:
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    print("CPU-only mode enabled: CUDA disabled.")
+else:
+    if args.gpu_device is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
+        print(f"Set CUDA_VISIBLE_DEVICES to {args.gpu_device} (will appear as device 0 in torch)")
+        # Always use device 0 in torch if CUDA_VISIBLE_DEVICES is set
+        torch.cuda.set_device(0)
 
 # Load Hugging Face token from .env file
 load_dotenv()

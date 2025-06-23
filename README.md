@@ -48,6 +48,8 @@ dataset_cache: ./datasets
 model_name: whisper-medium
 model_cache: ./models
 gpu_device: 1
+cpu_only: true                    # Force CPU-only mode (overrides GPU selection). Set true to disable CUDA even if available.
+
 whisper_pretrained: null  # If null, defaults to openai/<model_name>
 checkpoint_name: null     # If null, defaults to <dataset_short>_<model_name>-<lang> (see above for logic)
 checkpoint_dir: null      # If null, defaults to ./checkpoints/<checkpoint_name>
@@ -99,6 +101,7 @@ python whisper_finetune_script.py --config config.yaml -g 0 --max-steps 8000 --m
 - `-ck`, `--checkpoint-name`: Checkpoint name
 - `-cd`, `--checkpoint-dir`: Checkpoint directory
 - `-t`, `--max-steps`: Max training steps
+- `--cpu-only`: Force CPU-only mode (overrides GPU selection and disables CUDA)
 
 ---
 
