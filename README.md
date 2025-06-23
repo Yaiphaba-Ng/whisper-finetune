@@ -23,7 +23,9 @@ whisper-finetune/
 ```
 
 - **datasets/**: Contains downloaded and processed datasets. Subfolders are created per dataset/config.
-- **checkpoints/**: Contains all training checkpoints. Each run creates a subfolder named after the checkpoint (e.g., `whisper-medium-assamese`).
+- **checkpoints/**: Contains all training checkpoints. Each run creates a subfolder named after the checkpoint. By default, the checkpoint name is `<dataset_short>_<model_name>-<lang>`, where:
+  - `dataset_short` is automatically set to `fleurs` if the dataset name contains "fleurs", `commonvoice` if it contains "common_voice" or "commonvoice", and `custom` otherwise.
+  - Example: `fleurs_whisper-medium-as`, `commonvoice_whisper-large-hi`, or `custom_whisper-medium-xx`.
 - **models/**: Hugging Face model cache. Stores downloaded model weights and tokenizer files.
 
 ---
@@ -42,7 +44,7 @@ model_name: whisper-medium
 model_cache: ./models
 gpu_device: 1
 whisper_pretrained: null  # If null, defaults to openai/<model_name>
-checkpoint_name: null     # If null, defaults to <model_name>-<lang>
+checkpoint_name: null     # If null, defaults to <dataset_short>_<model_name>-<lang> (see above for logic)
 checkpoint_dir: null      # If null, defaults to ./checkpoints/<checkpoint_name>
 hf_token: <your_hf_token> # Required: Hugging Face access token
 

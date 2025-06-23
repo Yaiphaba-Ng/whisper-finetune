@@ -9,7 +9,8 @@ model_name: whisper-medium        # Hugging Face model name (e.g., 'openai/whisp
 model_cache: ./models             # Directory to cache the model
 gpu_device: null                  # GPU device ID to use (e.g., 0, 1). If null, uses the first available GPU.
 whisper_pretrained: null          # If null, defaults to openai/<model_name>
-checkpoint_name: null             # If null, defaults to <model_name>-<lang>
+# If null, defaults to <dataset_short>_<model_name>-<lang> where dataset_short is 'fleurs', 'commonvoice', or 'custom'
+checkpoint_name: null             
 checkpoint_dir: null              # If null, defaults to ./checkpoints/<checkpoint_name>
 hf_token: access_token
 

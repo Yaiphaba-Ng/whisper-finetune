@@ -520,7 +520,21 @@ def main():
     model_name = args.model_name if args.model_name is not None else config_dict.get('model_name', 'whisper-medium')
     model_cache = args.model_cache if args.model_cache is not None else config_dict.get('model_cache', './models')
     whisper_pretrained = args.whisper_pretrained if args.whisper_pretrained is not None else config_dict.get('whisper_pretrained', f"openai/{model_name}")
-    checkpoint_name = args.checkpoint_name if args.checkpoint_name is not None else config_dict.get('checkpoint_name', f"{model_name}-{lang}")
+
+    # --- Dataset short name logic for checkpoint naming ---
+    def get_dataset_short_name(ds_name):
+        ds = ds_name.lower() if ds_name else ''
+        if 'fleurs' in ds:
+            return 'fleurs'
+        elif 'common_voice' in ds or 'commonvoice' in ds:
+            return 'commonvoice'
+        else:
+            return 'custom'
+    dataset_short = get_dataset_short_name(dataset_name)
+
+    # New default checkpoint_name
+    default_checkpoint_name = f"{dataset_short}_{model_name}-{lang}"
+    checkpoint_name = args.checkpoint_name if args.checkpoint_name is not None else config_dict.get('checkpoint_name', default_checkpoint_name)
     checkpoint_dir = args.checkpoint_dir if args.checkpoint_dir is not None else config_dict.get('checkpoint_dir', f"./checkpoints/{checkpoint_name}")
     max_steps = args.max_steps if args.max_steps is not None else config_dict.get('max_steps', 4000)
     gpu_device = args.gpu_device if args.gpu_device is not None else config_dict.get('gpu_device', None)
