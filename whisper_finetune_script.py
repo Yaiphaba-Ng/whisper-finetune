@@ -35,12 +35,13 @@ else:
 # Load Hugging Face token from .env file
 load_dotenv()
 hf_token = os.getenv('HF_TOKEN', None)
-if not hf_token:
-    print("ERROR: Hugging Face token (HF_TOKEN) not found in .env file.")
-    sys.exit(1)
-print(f"HF Token: {hf_token}")
-from huggingface_hub import login
-login(token=hf_token)
+# Commented out Hugging Face login and push-to-hub logic for compatibility with older gradio/huggingface_hub
+# if not hf_token:
+#     print("ERROR: Hugging Face token (HF_TOKEN) not found in .env file.")
+#     sys.exit(1)
+# print(f"HF Token: {hf_token}")
+# from huggingface_hub import login
+# login(token=hf_token)
 
 from datasets import load_dataset, DatasetDict, Audio
 from transformers import (
@@ -309,22 +310,23 @@ def finetune_whisper(
     print("Training complete. Best model saved at:", training_args.output_dir)
     print(f"Final WER on test set: {eval_results.get('eval_wer', 'N/A')}")
 
-    # Push to hub logic (from notebook)
-    push_kwargs = {
-        "dataset_tags": f"{dataset_name}",
-        "dataset": "Common Voice 11.0",  # a 'pretty' name for the training dataset
-        "dataset_args": f"config: {lang}, split: test",
-        "language": f"{lang}",  # Use ISO 639-1 code for Hugging Face Hub
-        "model_name": f"{checkpoint_name} - Fine-tuned",  # a 'pretty' name for our model
-        "finetuned_from": whisper_pretrained,
-        "tasks": "automatic-speech-recognition",
-    }
-    print("Pushing model and processor to the Hugging Face Hub...")
-    trainer.push_to_hub(**push_kwargs)
+    # Commented out push to hub logic for compatibility with older gradio/huggingface_hub
+    # push_kwargs = {
+    #     "dataset_tags": f"{dataset_name}",
+    #     "dataset": "Common Voice 11.0",  # a 'pretty' name for the training dataset
+    #     "dataset_args": f"config: {lang}, split: test",
+    #     "language": f"{lang}",  # Use ISO 639-1 code for Hugging Face Hub
+    #     "model_name": f"{checkpoint_name} - Fine-tuned",  # a 'pretty' name for our model
+    #     "finetuned_from": whisper_pretrained,
+    #     "tasks": "automatic-speech-recognition",
+    # }
+    # print("Pushing model and processor to the Hugging Face Hub...")
+    # trainer.push_to_hub(**push_kwargs)
+    # print("Push to hub complete.")
+
+    # Save processor files
+    print(f"Saving processor files to {training_args.output_dir}...")
     processor.save_pretrained(training_args.output_dir)
-    feature_extractor.save_pretrained(training_args.output_dir)
-    tokenizer.save_pretrained(training_args.output_dir)
-    print("Push to hub complete.")
 
 def evaluate_checkpoint(
     checkpoint_path,
