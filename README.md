@@ -48,8 +48,7 @@ dataset_cache: ./datasets
 model_name: whisper-medium
 model_cache: ./models
 gpu_device: 1
-cpu_only: true                    # Force CPU-only mode (overrides GPU selection). Set true to disable CUDA even if available.
-
+cpu_only: true            # Force CPU-only mode (overrides GPU selection). Set true to disable CUDA even if available.
 whisper_pretrained: null  # If null, defaults to openai/<model_name>
 checkpoint_name: null     # If null, defaults to <dataset_short>_<model_name>-<lang> (see above for logic)
 checkpoint_dir: null      # If null, defaults to ./checkpoints/<checkpoint_name>
