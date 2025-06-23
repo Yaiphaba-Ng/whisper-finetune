@@ -101,6 +101,31 @@ python whisper_finetune_script.py --config config.yaml -g 0 --max-steps 8000 --m
 - `-cd`, `--checkpoint-dir`: Checkpoint directory
 - `-t`, `--max-steps`: Max training steps
 - `--cpu-only`: Force CPU-only mode (overrides GPU selection and disables CUDA)
+- `--local-dataset-path`: Path to a local dataset archive (e.g., `.tar`) or extracted folder. If set, the script will load the dataset from this path instead of downloading from Hugging Face. Works for both FLEURS and Common Voice datasets.
+
+---
+
+### Example: Load from Local Dataset
+
+To use a local dataset (already downloaded or extracted):
+
+```
+python whisper_finetune_script.py --local-dataset-path ./datasets/Common Voice/cv-corpus-11.0-2022-09-21-as.tar
+```
+
+Or, if you have extracted the dataset:
+
+```
+python whisper_finetune_script.py --local-dataset-path ./datasets/Common Voice/cv-corpus-11.0-2022-09-21-as/
+```
+
+You can also set this in your `config.yaml`:
+
+```yaml
+local_dataset_path: ./datasets/Common Voice/cv-corpus-11.0-2022-09-21-as.tar
+```
+
+If `local_dataset_path` is set, it overrides remote download and loads the dataset from the specified path.
 
 ---
 
