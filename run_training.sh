@@ -1,2 +1,2 @@
 #!/bin/bash
-nohup python whisper_finetune_script.py > train.log 2>&1 &
+nohup python whisper_finetune_script.py -T > train.log 2>&1 &
