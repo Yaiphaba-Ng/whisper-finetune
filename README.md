@@ -247,4 +247,20 @@ Here are some recommended value pairs:
 
 ---
 
+## 11. Example: Evaluate or Test a Checkpoint
+
+To evaluate or test a specific checkpoint, use the following command:
+
+```
+python .\whisper_finetune_script.py -E -ch checkpoints\whisper-medium-as\checkpoint-1000
+```
+
+- `-E` tells the script to run in evaluation (test) mode instead of training.
+- `-ch` specifies the path to the checkpoint directory you want to evaluate.
+- This will load the model weights from the given checkpoint and run evaluation on the configured test set.
+
+You can use this to quickly test the performance of any saved checkpoint without resuming training.
+
+---
+
 For further customization, see the Hugging Face [Seq2SeqTrainingArguments documentation](https://huggingface.co/docs/transformers/main_classes/trainer#transformers.Seq2SeqTrainingArguments).

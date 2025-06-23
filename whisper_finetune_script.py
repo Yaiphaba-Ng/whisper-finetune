@@ -492,10 +492,13 @@ def main():
     parser.add_argument('-ch', '--checkpoint', dest='eval_checkpoint', type=str, default=None, help='Checkpoint directory path for evaluation')
     parser.add_argument('-pt', '--pretrained', dest='pretrained_model', type=str, default=None, help='HuggingFace model name to evaluate (e.g., openai/whisper-medium)')
     parser.add_argument('--gradio', dest='gradio_mode', action='store_true', help='Launch Gradio ASR demo')
+    parser.add_argument('-T', '--train', dest='train_mode', action='store_true', help='Run in training mode')
     args = parser.parse_args()
 
     # Determine mode
-    if args.eval_mode:
+    if args.train_mode:
+        mode = "train"
+    elif args.eval_mode:
         mode = "eval"
     else:
         mode = input("Select mode (train/eval): ").strip().lower()
