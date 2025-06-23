@@ -9,10 +9,8 @@ model_name: whisper-medium        # Hugging Face model name (e.g., 'openai/whisp
 model_cache: ./models             # Directory to cache the model
 gpu_device: null                  # GPU device ID to use (e.g., 0, 1). If null, uses the first available GPU.
 whisper_pretrained: null          # If null, defaults to openai/<model_name>
-# If null, defaults to <dataset_short>_<model_name>-<lang> where dataset_short is 'fleurs', 'commonvoice', or 'custom'
-checkpoint_name: null             
+checkpoint_name: null             # If null, defaults to <dataset_short>_<model_name>-<lang> where dataset_short is 'fleurs', 'commonvoice', or 'custom'
 checkpoint_dir: null              # If null, defaults to ./checkpoints/<checkpoint_name>
-hf_token: access_token
 
 # Training arguments (passed to Hugging Face Seq2SeqTrainingArguments)
 per_device_train_batch_size: 4    # Batch size per device for training (Try 8, 4, or 2 to reduce GPU load)

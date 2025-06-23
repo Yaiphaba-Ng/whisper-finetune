@@ -26,12 +26,17 @@ whisper-finetune/
 - **checkpoints/**: Contains all training checkpoints. Each run creates a subfolder named after the checkpoint. By default, the checkpoint name is `<dataset_short>_<model_name>-<lang>`, where:
   - `dataset_short` is automatically set to `fleurs` if the dataset name contains "fleurs", `commonvoice` if it contains "common_voice" or "commonvoice", and `custom` otherwise.
   - Example: `fleurs_whisper-medium-as`, `commonvoice_whisper-large-hi`, or `custom_whisper-medium-xx`.
-- **models/**: Hugging Face model cache. Stores downloaded model weights and tokenizer files.
 
 ---
 
-## 2. Configuration: `config.yaml`
-All script and training arguments are set in `config.yaml`. Example:
+## 2. Configuration: `config.yaml` and `.env`
+All script and training arguments are set in `config.yaml`, except for your Hugging Face token, which must be set in a `.env` file in the project root:
+
+```
+HF_TOKEN=your_hf_token_here
+```
+
+Example `config.yaml`:
 
 ```yaml
 # General configuration
@@ -46,7 +51,7 @@ gpu_device: 1
 whisper_pretrained: null  # If null, defaults to openai/<model_name>
 checkpoint_name: null     # If null, defaults to <dataset_short>_<model_name>-<lang> (see above for logic)
 checkpoint_dir: null      # If null, defaults to ./checkpoints/<checkpoint_name>
-hf_token: <your_hf_token> # Required: Hugging Face access token
+# hf_token: <your_hf_token> # Required: Hugging Face access token
 
 # Training arguments (passed to Hugging Face Seq2SeqTrainingArguments)
 per_device_train_batch_size: 16
@@ -71,7 +76,7 @@ greater_is_better: false
 push_to_hub: true
 ```
 
-> **Note:** For a list of language codes, see: https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
+> **Note:** You must create a `.env` file with your Hugging Face token as `HF_TOKEN=...` in the project root. The script will not run without it.
 
 ---
 
@@ -144,7 +149,7 @@ nohup python whisper_finetune_script.py -g 1 > train.log 2>&1 &
 ---
 
 ## 7. Notes & Best Practices
-- Always set your Hugging Face token in `config.yaml` (`hf_token:`).
+- Always set your Hugging Face token in a `.env` file (`HF_TOKEN=...`).
 - For new experiments, change `checkpoint_name` to avoid overwriting previous runs.
 - Monitor training with TensorBoard (if enabled in `report_to`).
 - Adjust batch size and accumulation steps to fit your GPU memory.
@@ -155,11 +160,15 @@ nohup python whisper_finetune_script.py -g 1 > train.log 2>&1 &
 ## 8. Example: Quick Start
 
 1. Edit `config.yaml` with your dataset/model/token.
-2. Make the training script executable (only needed once after git clone):
+2. Create a `.env` file in the project root with your Hugging Face token:
+   ```
+   HF_TOKEN=your_hf_token_here
+   ```
+3. Make the training script executable (only needed once after git clone):
    ```bash
    chmod +x run_training.sh
    ```
-3. Run:
+4. Run:
    ```bash
    bash run_training.sh
    # or
@@ -167,7 +176,7 @@ nohup python whisper_finetune_script.py -g 1 > train.log 2>&1 &
    # To monitor training log in real time:
    tail -f train.log
    ```
-4. Monitor progress in `train.log` or with TensorBoard.
+5. Monitor progress in `train.log` or with TensorBoard.
 
 ---
 

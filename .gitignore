@@ -17,3 +17,5 @@ Checkpoint Files/
 .gradio/
 checkpoints/whisper-medium-as/checkpoint-1000/optimizer.pt
 checkpoints/whisper-medium-as/checkpoint-1000/model.safetensors
+.env
+whisper_finetune_script.py
