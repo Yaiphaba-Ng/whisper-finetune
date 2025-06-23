@@ -1,8 +1,8 @@
 # General configuration (Set these to match your dataset and model preferences)
 lang: as                          # ISO 639-1/2/3 code for both dataset and model language
-dataset_name: google/fleurs       # Hugging Face dataset name (e.g., 'google/fleurs')
+dataset_name: mozilla-foundation/common_voice_11_0       # Hugging Face dataset name (e.g., 'google/fleurs')
 dataset_cache: ./datasets         # Directory to cache the dataset
-model_name: whisper-medium        # Hugging Face model name (e.g., 'openai/whisper-medium')
+model_name: whisper-large-v3        # Hugging Face model name (e.g., 'openai/whisper-medium')
 model_cache: ./models             # Directory to cache the model
 gpu_device: null                  # GPU device ID to use (e.g., 0, 1). If null, uses the first available GPU.
 cpu_only: true                    # Force CPU-only mode (overrides GPU selection). Set true to disable CUDA even if available.
