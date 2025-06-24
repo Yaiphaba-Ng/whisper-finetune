@@ -508,7 +508,6 @@ def main():
     parser.add_argument("-cd", "--checkpoint-dir", dest="checkpoint_dir", type=str, default=None, help="Checkpoint directory (default: ./checkpoints/<checkpoint_name>)")
     parser.add_argument('-t', '--max-steps', dest='max_steps', type=int, default=None, help='Max training steps (default: 4000)')
     parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
-    parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
     parser.add_argument('-E', '--eval', dest='eval_mode', action='store_true', help='Run in evaluation mode')
     parser.add_argument('-ch', '--checkpoint', dest='eval_checkpoint', type=str, default=None, help='Checkpoint directory path for evaluation')
     parser.add_argument('-pt', '--pretrained', dest='pretrained_model', type=str, default=None, help='HuggingFace model name to evaluate (e.g., openai/whisper-medium)')
