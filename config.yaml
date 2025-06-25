@@ -5,16 +5,16 @@ dataset_cache: ./datasets         # Directory to cache the dataset
 model_name: whisper-small         # Hugging Face model name (e.g., 'openai/whisper-medium')
 model_cache: ./models             # Directory to cache the model
 gpu_device: null                  # GPU device ID to use (e.g., 0, 1). If null, uses the first available GPU.
-cpu_only: true                    # Force CPU-only mode (overrides GPU selection). Set true to disable CUDA even if available.
+cpu_only: false                   # Force CPU-only mode (overrides GPU selection). Set true to disable CUDA even if available.
 whisper_pretrained: null          # If null, defaults to openai/<model_name>
 checkpoint_name: null             # If null, defaults to <dataset_short>_<model_name>-<lang> where dataset_short is 'fleurs', 'commonvoice', or 'custom'
 checkpoint_dir: null              # If null, defaults to ./checkpoints/<checkpoint_name>
 
 # Training arguments (passed to Hugging Face Seq2SeqTrainingArguments)
-per_device_train_batch_size: 4    # Batch size per device for training (Try 8, 4, or 2 to reduce GPU load)
-gradient_accumulation_steps: 4    # Number of steps to accumulate gradients before updating model weights (Try 2, 4, or 8 if lowering batch size)
+per_device_train_batch_size: 8    # Batch size per device for training (Try 8, 4, or 2 to reduce GPU load)
+gradient_accumulation_steps: 2    # Number of steps to accumulate gradients before updating model weights (Try 2, 4, or 8 if lowering batch size)
 learning_rate: 1e-5               # Learning rate for the optimizer
-warmup_steps: 250                 # Number of warmup steps for learning rate scheduler
+warmup_steps: 500                 # Number of warmup steps for learning rate scheduler
 max_steps: 8000                   # Total number of training steps
 gradient_checkpointing: true      # Enable gradient checkpointing to save memory
 fp16: true                        # Use mixed precision training
@@ -22,8 +22,8 @@ eval_strategy: steps              # Evaluation strategy: 'no', 'epoch', or 'step
 per_device_eval_batch_size: 2     # Batch size for evaluation
 predict_with_generate: true       # Use generate method for evaluation
 generation_max_length: 225        # Maximum length for generated sequences
-save_steps: 500                   # Step interval to save the model
-eval_steps: 500                   # Step interval to evaluate the model
+save_steps: 1000                  # Step interval to save the model
+eval_steps: 1000                  # Step interval to evaluate the model
 logging_steps: 25                 # Step interval to log training metrics
 report_to:
   - tensorboard                   # Reporting tools, e.g., 'tensorboard', 'wandb'

@@ -17,17 +17,16 @@ parser.add_argument("-c", '--cpu-only', dest='cpu_only', action='store_true', he
 args, unknown = parser.parse_known_args()
 
 # CPU-only logic (CLI overrides config)
-cpu_only = getattr(args, 'cpu_only', False)
-config_path = getattr(args, 'config', 'config.yaml')
-if not cpu_only and os.path.exists(config_path):
-    with open(config_path, 'r') as f:
+cpu_only = args.cpu_only
+if not cpu_only and os.path.exists(args.config):
+    with open(args.config, 'r') as f:
         _cfg = yaml.safe_load(f)
         cpu_only = _cfg.get('cpu_only', False)
 if cpu_only:
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
     print("CPU-only mode enabled: CUDA disabled.")
 else:
-    if getattr(args, 'gpu_device', None) is not None:
+    if args.gpu_device is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
         print(f"Set CUDA_VISIBLE_DEVICES to {args.gpu_device} (will appear as device 0 in torch)")
         # Always use device 0 in torch if CUDA_VISIBLE_DEVICES is set
@@ -508,6 +507,7 @@ def gradio_transcribe_interface(
 
 def main():
     parser = argparse.ArgumentParser(description="Fine-tune Whisper for multilingual ASR")
+    parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
     parser.add_argument("-l", "--lang", dest="lang", type=str, default=None, help="Language code (ISO 639-1/2/3) for both dataset and model (e.g., 'as' for Assamese)")
     parser.add_argument("-dn", "--name", dest="dataset_name", type=str, default=None, help="Dataset name (default: mozilla-foundation/common_voice_11_0)")
     parser.add_argument("-dc", "--cache", dest="dataset_cache", type=str, default=None, help="Dataset cache directory (default: ./datasets)")
