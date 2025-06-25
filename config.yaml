@@ -11,8 +11,8 @@ checkpoint_name: null             # If null, defaults to <dataset_short>_<model_
 checkpoint_dir: null              # If null, defaults to ./checkpoints/<checkpoint_name>
 
 # Training arguments (passed to Hugging Face Seq2SeqTrainingArguments)
-per_device_train_batch_size: 8    # Batch size per device for training (Try 8, 4, or 2 to reduce GPU load)
-gradient_accumulation_steps: 2    # Number of steps to accumulate gradients before updating model weights (Try 2, 4, or 8 if lowering batch size)
+per_device_train_batch_size: 4    # Batch size per device for training (Try 8, 4, or 2 to reduce GPU load)
+gradient_accumulation_steps: 4    # Number of steps to accumulate gradients before updating model weights (Try 2, 4, or 8 if lowering batch size)
 learning_rate: 1e-5               # Learning rate for the optimizer
 warmup_steps: 500                 # Number of warmup steps for learning rate scheduler
 max_steps: 8000                   # Total number of training steps
