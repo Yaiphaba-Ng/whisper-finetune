@@ -17,16 +17,17 @@ parser.add_argument("-c", '--cpu-only', dest='cpu_only', action='store_true', he
 args, unknown = parser.parse_known_args()
 
 # CPU-only logic (CLI overrides config)
-cpu_only = args.cpu_only
-if not cpu_only and os.path.exists(args.config):
-    with open(args.config, 'r') as f:
+cpu_only = getattr(args, 'cpu_only', False)
+config_path = getattr(args, 'config', 'config.yaml')
+if not cpu_only and os.path.exists(config_path):
+    with open(config_path, 'r') as f:
         _cfg = yaml.safe_load(f)
         cpu_only = _cfg.get('cpu_only', False)
 if cpu_only:
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
     print("CPU-only mode enabled: CUDA disabled.")
 else:
-    if args.gpu_device is not None:
+    if getattr(args, 'gpu_device', None) is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
         print(f"Set CUDA_VISIBLE_DEVICES to {args.gpu_device} (will appear as device 0 in torch)")
         # Always use device 0 in torch if CUDA_VISIBLE_DEVICES is set
