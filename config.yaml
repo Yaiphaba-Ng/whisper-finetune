@@ -1,8 +1,8 @@
 # General configuration (Set these to match your dataset and model preferences)
 lang: as                          # ISO 639-1/2/3 code for both dataset and model language
-dataset_name: mozilla-foundation/common_voice_11_0       # Hugging Face dataset name (e.g., 'google/fleurs')
+dataset_name: google/fleurs       # Hugging Face dataset name (e.g., 'google/fleurs')
 dataset_cache: ./datasets         # Directory to cache the dataset
-model_name: whisper-large-v3        # Hugging Face model name (e.g., 'openai/whisper-medium')
+model_name: whisper-small         # Hugging Face model name (e.g., 'openai/whisper-medium')
 model_cache: ./models             # Directory to cache the model
 gpu_device: null                  # GPU device ID to use (e.g., 0, 1). If null, uses the first available GPU.
 cpu_only: true                    # Force CPU-only mode (overrides GPU selection). Set true to disable CUDA even if available.
@@ -15,7 +15,7 @@ per_device_train_batch_size: 4    # Batch size per device for training (Try 8, 4
 gradient_accumulation_steps: 4    # Number of steps to accumulate gradients before updating model weights (Try 2, 4, or 8 if lowering batch size)
 learning_rate: 1e-5               # Learning rate for the optimizer
 warmup_steps: 250                 # Number of warmup steps for learning rate scheduler
-max_steps: 4000                   # Total number of training steps
+max_steps: 8000                   # Total number of training steps
 gradient_checkpointing: true      # Enable gradient checkpointing to save memory
 fp16: true                        # Use mixed precision training
 eval_strategy: steps              # Evaluation strategy: 'no', 'epoch', or 'steps'
@@ -31,4 +31,4 @@ load_best_model_at_end: true      # Load the best model at the end of training
 metric_for_best_model: wer        # Metric to determine the best model
 greater_is_better: false          # Whether a higher metric value is better
 push_to_hub: true                 # Push the model to Hugging Face Hub
-delay_between_batches_sec: 1      # Delay (in seconds) to wait after each training batch. Set 0 for no delay. Try 0.5, 1, 2 second delays.
+delay_between_batches_sec: 0      # Delay (in seconds) to wait after each training batch. Set 0 for no delay. Try 0.5, 1, 2 second delays.

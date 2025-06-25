@@ -191,6 +191,16 @@ def finetune_whisper(
             return batch
         dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
         dataset = dataset.map(prepare_common_voice, remove_columns=dataset["train"].column_names, num_proc=1)
+
+    # Filter out samples with too-long labels (max 448 tokens)
+    max_label_length = 448
+    def filter_long_labels(batch):
+        return len(batch["labels"]) <= max_label_length
+
+    dataset["train"] = dataset["train"].filter(filter_long_labels)
+    dataset["test"] = dataset["test"].filter(filter_long_labels)
+    print("Filtered out samples with labels exceeding 448 tokens.")
+
     # Model
     model = WhisperForConditionalGeneration.from_pretrained(whisper_pretrained, cache_dir=model_cache)
     # Move generation parameters from model.config to model.generation_config to silence warning
@@ -289,6 +299,7 @@ def finetune_whisper(
             time.sleep(delay_between_batches_sec)
             return result
         trainer.training_step = delayed_training_step
+    processor.save_pretrained(training_args.output_dir)
     # Train the model, resume if checkpoint exists, else start fresh
     import os
     checkpoint_dir_to_check = training_args.output_dir
@@ -305,6 +316,7 @@ def finetune_whisper(
     else:
         print(f"No valid checkpoint found in {checkpoint_dir_to_check}. Starting training from scratch...")
         trainer.train()
+
     # Evaluate on test set and print final WER
     eval_results = trainer.evaluate()
     print("Training complete. Best model saved at:", training_args.output_dir)
@@ -313,7 +325,7 @@ def finetune_whisper(
     # Push to hub logic (from notebook)
     push_kwargs = {
         "dataset_tags": f"{dataset_name}",
-        "dataset": "Common Voice 11.0",  # a 'pretty' name for the training dataset
+        "dataset": f"{dataset_name}",  # a 'pretty' name for the training dataset
         "dataset_args": f"config: {lang}, split: test",
         "language": f"{lang}",  # Use ISO 639-1 code for Hugging Face Hub
         "model_name": f"{checkpoint_name} - Fine-tuned",  # a 'pretty' name for our model
@@ -322,9 +334,6 @@ def finetune_whisper(
     }
     print("Pushing model and processor to the Hugging Face Hub...")
     trainer.push_to_hub(**push_kwargs)
-    processor.save_pretrained(training_args.output_dir)
-    feature_extractor.save_pretrained(training_args.output_dir)
-    tokenizer.save_pretrained(training_args.output_dir)
     print("Push to hub complete.")
 
 def evaluate_checkpoint(
