@@ -2,9 +2,12 @@ import psutil
 import subprocess
 import time
 from datetime import datetime
+import os
 
 LOG_INTERVAL = 5  # seconds
-LOG_FILE = "system_metrics_log.txt"
+LOG_DIR = "./system_metrics"
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".txt")
 
 def get_cpu_temp():
     try:
