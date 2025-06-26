@@ -1,7 +1,6 @@
 import os
 import sys
 import argparse
-import torch  # Ensure torch is imported at the top
 import yaml  # Add at the top with other imports
 import random  # Added for evaluation sampling
 from datetime import datetime
@@ -18,19 +17,26 @@ args, unknown = parser.parse_known_args()
 
 # CPU-only logic (CLI overrides config)
 cpu_only = args.cpu_only
+selected_gpu = args.gpu_device
 if not cpu_only and os.path.exists(args.config):
     with open(args.config, 'r') as f:
         _cfg = yaml.safe_load(f)
         cpu_only = _cfg.get('cpu_only', False)
+        if not selected_gpu:
+            selected_gpu = _cfg.get('gpu_device', None)
 if cpu_only:
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
     print("CPU-only mode enabled: CUDA disabled.")
 else:
-    if args.gpu_device is not None:
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
-        print(f"Set CUDA_VISIBLE_DEVICES to {args.gpu_device} (will appear as device 0 in torch)")
-        # Always use device 0 in torch if CUDA_VISIBLE_DEVICES is set
-        torch.cuda.set_device(0)
+    if selected_gpu is not None and str(selected_gpu).lower() != 'null':
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(selected_gpu)
+        print(f"Set CUDA_VISIBLE_DEVICES to {selected_gpu} (will appear as device 0 in torch)")
+
+import torch  # Ensure torch is imported after CUDA_VISIBLE_DEVICES is set
+# Check if CUDA is available
+if torch.cuda.is_available():
+    print(f"CUDA is available. Using GPU device: {torch.cuda.get_device_name(0)}")
+
 
 # Load Hugging Face token from .env file
 load_dotenv()
@@ -39,8 +45,8 @@ if not hf_token:
     print("ERROR: Hugging Face token (HF_TOKEN) not found in .env file.")
     sys.exit(1)
 print(f"HF Token: {hf_token}")
-from huggingface_hub import login
-login(token=hf_token)
+# from huggingface_hub import login
+# login(token=hf_token)
 
 from datasets import load_dataset, DatasetDict, Audio
 from transformers import (
