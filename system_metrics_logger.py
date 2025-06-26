@@ -56,14 +56,14 @@ def log_metrics():
             ram_pct = ram.percent
             gpus = get_gpu_stats()
             log_entry = [f"[{timestamp}]"]
-            log_entry.append(f"CPU: {cpu_util:.1f}% util, {cpu_temp if cpu_temp is not None else 'N/A'}°C, RAM: {ram_used}/{ram_total} MB ({ram_pct:.1f}%)")
+            log_entry.append(f"\tCPU: {cpu_util:.1f}% util, {cpu_temp if cpu_temp is not None else 'N/A'}°C, RAM: {ram_used}/{ram_total} MB ({ram_pct:.1f}%)")
             for i in range(2):
                 if i < len(gpus):
                     g = gpus[i]
-                    log_entry.append(f"GPU{i}: {g['util']}% util, {g['temp']}°C, {g['mem_used']}/{g['mem_total']} MB ({g['mem_pct']:.1f}%)")
+                    log_entry.append(f"\tGPU{i}: {g['util']}% util, {g['temp']}°C, {g['mem_used']}/{g['mem_total']} MB ({g['mem_pct']:.1f}%)")
                 else:
-                    log_entry.append(f"GPU{i}: N/A")
-            log_line = ' | '.join(log_entry)
+                    log_entry.append(f"\tGPU{i}: N/A")
+            log_line = ''.join(log_entry)
             print(log_line)
             logfile.write(log_line + '\n')
             logfile.flush()
