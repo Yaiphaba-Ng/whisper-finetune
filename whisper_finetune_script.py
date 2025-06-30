@@ -8,22 +8,29 @@ import json
 import gradio as gr
 from dotenv import load_dotenv  # Add dotenv import
 
-# Early parse for GPU
+# Early parse for GPU and config
 parser = argparse.ArgumentParser()
 parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
 parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
 parser.add_argument("-c", '--cpu-only', dest='cpu_only', action='store_true', help='Force CPU-only mode (overrides GPU selection)')
 args, unknown = parser.parse_known_args()
 
-# CPU-only logic (CLI overrides config)
+# --- Robust device selection logic ---
 cpu_only = args.cpu_only
-selected_gpu = args.gpu_device
-if not cpu_only and os.path.exists(args.config):
+selected_gpu = None
+config_gpu = None
+if os.path.exists(args.config):
     with open(args.config, 'r') as f:
         _cfg = yaml.safe_load(f)
-        cpu_only = _cfg.get('cpu_only', False)
-        if not selected_gpu:
-            selected_gpu = _cfg.get('gpu_device', None)
+        config_gpu = _cfg.get('gpu_device', None)
+        if not cpu_only:
+            cpu_only = _cfg.get('cpu_only', False)
+# CLI takes priority, then config, else None
+if not cpu_only:
+    if args.gpu_device is not None:
+        selected_gpu = args.gpu_device
+    elif config_gpu is not None:
+        selected_gpu = config_gpu
 if cpu_only:
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
     print("CPU-only mode enabled: CUDA disabled.")
@@ -570,6 +577,8 @@ def main():
     checkpoint_name = args.checkpoint_name if args.checkpoint_name is not None else config_dict.get('checkpoint_name', f"{dataset_short}_{model_name}-{lang}")
     checkpoint_dir = args.checkpoint_dir if args.checkpoint_dir is not None else config_dict.get('checkpoint_dir', f"./checkpoints/{checkpoint_name}")
     max_steps = args.max_steps if args.max_steps is not None else config_dict.get('max_steps', 4000)
+
+    # GPU device selection: CLI > config > None
     gpu_device = args.gpu_device if args.gpu_device is not None else config_dict.get('gpu_device', None)
 
     if mode == "train":
