@@ -8,27 +8,27 @@ import json
 import gradio as gr
 from dotenv import load_dotenv  # Add dotenv import
 
-# Early parse for GPU and config
-parser = argparse.ArgumentParser()
-parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
-parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
-parser.add_argument("-c", '--cpu-only', dest='cpu_only', action='store_true', help='Force CPU-only mode (overrides GPU selection)')
-args, unknown = parser.parse_known_args()
+# Early parse for GPU and config (robust to unknown args)
+early_parser = argparse.ArgumentParser(add_help=False)
+early_parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
+early_parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
+early_parser.add_argument("-c", '--cpu-only', dest='cpu_only', action='store_true', help='Force CPU-only mode (overrides GPU selection)')
+early_args, _ = early_parser.parse_known_args()
 
 # --- Robust device selection logic ---
-cpu_only = args.cpu_only
+cpu_only = early_args.cpu_only
 selected_gpu = None
 config_gpu = None
-if os.path.exists(args.config):
-    with open(args.config, 'r') as f:
+if os.path.exists(early_args.config):
+    with open(early_args.config, 'r') as f:
         _cfg = yaml.safe_load(f)
         config_gpu = _cfg.get('gpu_device', None)
         if not cpu_only:
             cpu_only = _cfg.get('cpu_only', False)
 # CLI takes priority, then config, else None
 if not cpu_only:
-    if args.gpu_device is not None:
-        selected_gpu = args.gpu_device
+    if early_args.gpu_device is not None:
+        selected_gpu = early_args.gpu_device
     elif config_gpu is not None:
         selected_gpu = config_gpu
 if cpu_only:
@@ -40,9 +40,11 @@ else:
         print(f"Set CUDA_VISIBLE_DEVICES to {selected_gpu} (will appear as device 0 in torch)")
 
 import torch  # Ensure torch is imported after CUDA_VISIBLE_DEVICES is set
-# Check if CUDA is available
-if torch.cuda.is_available():
+# Check if CUDA is available and print device info robustly
+if torch.cuda.is_available() and torch.cuda.device_count() > 0:
     print(f"CUDA is available. Using GPU device: {torch.cuda.get_device_name(0)}")
+else:
+    print("CUDA is not available. Using CPU.")
 
 
 # Load Hugging Face token from .env file
