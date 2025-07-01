@@ -2,9 +2,9 @@
 lang: as                          # ISO 639-1/2/3 code for both dataset and model language
 dataset_name: google/fleurs       # Hugging Face dataset name (e.g., 'google/fleurs')
 dataset_cache: ./datasets         # Directory to cache the dataset
-model_name: whisper-small         # Hugging Face model name (e.g., 'openai/whisper-medium')
+model_name: whisper-medium        # Hugging Face model name (e.g., 'openai/whisper-medium')
 model_cache: ./models             # Directory to cache the model
-gpu_device: null                  # GPU device ID to use (e.g., 0, 1). If null, uses the first available GPU.
+gpu_device: 0                     # GPU device ID to use (e.g., 0, 1). If null, uses the first available GPU.
 cpu_only: false                   # Force CPU-only mode (overrides GPU selection). Set true to disable CUDA even if available.
 whisper_pretrained: null          # If null, defaults to openai/<model_name>
 checkpoint_name: null             # If null, defaults to <dataset_short>_<model_name>-<lang> where dataset_short is 'fleurs', 'commonvoice', or 'custom'
