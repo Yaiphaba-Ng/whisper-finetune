@@ -314,13 +314,93 @@ def evaluate_checkpoint(
     print("1. Complete test set (all samples)")
     print("2. 10 random samples")
     print("3. Gradio ASR demo (interactive UI)")
-    eval_mode = input("Enter 1, 2, or 3: ").strip()
+    print("4. Transcribe all audio files in a directory (with timestamps, real-time append)")
+    eval_mode = input("Enter 1, 2, 3, or 4: ").strip()
     if eval_mode == "1":
         samples = list(test_set)
         eval_mode_str = "all"
+        # ...existing code for test set evaluation...
+        inputs = [feature_extractor(s["audio"]["array"], sampling_rate=16000).input_features[0] for s in samples]
+        input_features = torch.tensor(inputs).unsqueeze(1) if len(inputs[0].shape) == 1 else torch.tensor(inputs)
+        input_features = input_features.to(device)
+        with torch.no_grad():
+            predicted_ids = model.generate(input_features)
+        pred_str = tokenizer.batch_decode(predicted_ids, skip_special_tokens=True)
+        label_str = [s["sentence"] for s in samples]
+        file_paths = [os.path.basename(s["audio"]["path"]) if "path" in s["audio"] else "" for s in samples]
+        metric = evaluate.load("wer")
+        wer = 100 * metric.compute(predictions=pred_str, references=label_str)
+        print(f"\nWER: {wer:.2f}%\n")
+        # Save results as .tsv in ./evals, recreating checkpoint path structure
+        if is_pretrained:
+            model_name_for_dir = checkpoint_path.replace('/', '_')
+            evals_dir = os.path.join("evals", "pretrained", model_name_for_dir)
+        else:
+            rel_ckpt_path = os.path.relpath(checkpoint_path, start=os.getcwd())
+            evals_dir = os.path.join("evals", rel_ckpt_path)
+        os.makedirs(evals_dir, exist_ok=True)
+        dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        tsv_path = os.path.join(evals_dir, f"eval_{dt_str}.tsv")
+        json_path = os.path.join(evals_dir, f"eval_{dt_str}.json")
+        with open(tsv_path, "w", encoding="utf-8") as f:
+            f.write("path\treference\thypothesis\n")
+            for p, ref, hyp in zip(file_paths, label_str, pred_str):
+                f.write(f"{p}\t{ref}\t{hyp}\n")
+        eval_config = {
+            "wer": wer,
+            "language": lang,
+            "eval_mode": eval_mode_str,
+            "dataset_name": dataset_name,
+            "model_name": checkpoint_path if is_pretrained else None,
+            "checkpoint_path": None if is_pretrained else checkpoint_path,
+            "num_samples": len(samples),
+            "datetime": dt_str,
+        }
+        with open(json_path, "w", encoding="utf-8") as jf:
+            json.dump(eval_config, jf, indent=2)
+        print(f"Evaluation log saved to: {tsv_path}\nConfig saved to: {json_path}")
     elif eval_mode == "2":
         samples = random.sample(list(test_set), 10)
         eval_mode_str = "10_samples"
+        # ...existing code for 10-sample evaluation...
+        inputs = [feature_extractor(s["audio"]["array"], sampling_rate=16000).input_features[0] for s in samples]
+        input_features = torch.tensor(inputs).unsqueeze(1) if len(inputs[0].shape) == 1 else torch.tensor(inputs)
+        input_features = input_features.to(device)
+        with torch.no_grad():
+            predicted_ids = model.generate(input_features)
+        pred_str = tokenizer.batch_decode(predicted_ids, skip_special_tokens=True)
+        label_str = [s["sentence"] for s in samples]
+        file_paths = [os.path.basename(s["audio"]["path"]) if "path" in s["audio"] else "" for s in samples]
+        metric = evaluate.load("wer")
+        wer = 100 * metric.compute(predictions=pred_str, references=label_str)
+        print(f"\nWER: {wer:.2f}%\n")
+        if is_pretrained:
+            model_name_for_dir = checkpoint_path.replace('/', '_')
+            evals_dir = os.path.join("evals", "pretrained", model_name_for_dir)
+        else:
+            rel_ckpt_path = os.path.relpath(checkpoint_path, start=os.getcwd())
+            evals_dir = os.path.join("evals", rel_ckpt_path)
+        os.makedirs(evals_dir, exist_ok=True)
+        dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        tsv_path = os.path.join(evals_dir, f"eval_{dt_str}.tsv")
+        json_path = os.path.join(evals_dir, f"eval_{dt_str}.json")
+        with open(tsv_path, "w", encoding="utf-8") as f:
+            f.write("path\treference\thypothesis\n")
+            for p, ref, hyp in zip(file_paths, label_str, pred_str):
+                f.write(f"{p}\t{ref}\t{hyp}\n")
+        eval_config = {
+            "wer": wer,
+            "language": lang,
+            "eval_mode": eval_mode_str,
+            "dataset_name": dataset_name,
+            "model_name": checkpoint_path if is_pretrained else None,
+            "checkpoint_path": None if is_pretrained else checkpoint_path,
+            "num_samples": len(samples),
+            "datetime": dt_str,
+        }
+        with open(json_path, "w", encoding="utf-8") as jf:
+            json.dump(eval_config, jf, indent=2)
+        print(f"Evaluation log saved to: {tsv_path}\nConfig saved to: {json_path}")
     elif eval_mode == "3":
         gradio_transcribe_interface(
             checkpoint_path=checkpoint_path,
@@ -329,53 +409,70 @@ def evaluate_checkpoint(
             is_pretrained=is_pretrained
         )
         return
+    elif eval_mode == "4":
+        import glob
+        import soundfile as sf
+        import numpy as np
+        print("Enter directory containing mp3 files:")
+        audio_dir = input("Directory path: ").strip()
+        if not os.path.isdir(audio_dir):
+            print(f"Directory not found: {audio_dir}")
+            return
+        mp3_files = glob.glob(os.path.join(audio_dir, "*.mp3"))
+        if not mp3_files:
+            print(f"No mp3 files found in {audio_dir}")
+            return
+        print(f"Found {len(mp3_files)} mp3 files. Starting transcription...")
+        for mp3_path in mp3_files:
+            base = os.path.splitext(os.path.basename(mp3_path))[0]
+            out_txt = os.path.join(audio_dir, base + ".txt")
+            print(f"Transcribing {mp3_path} -> {out_txt}")
+            # Load audio
+            audio_array, sr = sf.read(mp3_path)
+            # Convert to mono if stereo
+            if len(audio_array.shape) > 1:
+                audio_array = np.mean(audio_array, axis=1)
+            # Resample if needed
+            if sr != 16000:
+                import librosa
+                audio_array = librosa.resample(audio_array, orig_sr=sr, target_sr=16000)
+                sr = 16000
+            # Chunking parameters
+            max_chunk_sec = 30
+            max_chunk_samples = max_chunk_sec * 16000
+            overlap_sec = 1
+            overlap_samples = overlap_sec * 16000
+            total_samples = len(audio_array)
+            start = 0
+            with open(out_txt, "w", encoding="utf-8") as outf:
+                while start < total_samples:
+                    end = min(start + max_chunk_samples, total_samples)
+                    chunk = audio_array[start:end]
+                    # Prepare input for chunk
+                    inputs = processor(chunk, sampling_rate=sr, return_tensors="pt")
+                    input_features = inputs.input_features.to(device)
+                    # Transcribe chunk
+                    with torch.no_grad():
+                        outputs = model.generate(
+                            input_features,
+                            task="transcribe",
+                            language=lang
+                        )
+                    transcription = processor.batch_decode(outputs, skip_special_tokens=True)[0]
+                    # Write transcript to file (append in real time)
+                    for line in transcription.split("\n"):
+                        outf.write(line.strip() + "\n")
+                        outf.flush()
+                    # Move to next chunk with overlap
+                    if end == total_samples:
+                        break
+                    start = end - overlap_samples
+            print(f"Done: {out_txt}")
+        print("All files transcribed.")
+        return
     else:
         print("Invalid selection.")
         return
-    # Prepare inputs
-    inputs = [feature_extractor(s["audio"]["array"], sampling_rate=16000).input_features[0] for s in samples]
-    input_features = torch.tensor(inputs).unsqueeze(1) if len(inputs[0].shape) == 1 else torch.tensor(inputs)
-    input_features = input_features.to(device)
-    # Generate predictions
-    with torch.no_grad():
-        predicted_ids = model.generate(input_features)
-    pred_str = tokenizer.batch_decode(predicted_ids, skip_special_tokens=True)
-    label_str = [s["sentence"] for s in samples]
-    # Only use the filename, not the absolute path
-    file_paths = [os.path.basename(s["audio"]["path"]) if "path" in s["audio"] else "" for s in samples]
-    # Compute WER
-    metric = evaluate.load("wer")
-    wer = 100 * metric.compute(predictions=pred_str, references=label_str)
-    print(f"\nWER: {wer:.2f}%\n")
-    # Save results as .tsv in ./evals, recreating checkpoint path structure
-    if is_pretrained:
-        model_name_for_dir = checkpoint_path.replace('/', '_')
-        evals_dir = os.path.join("evals", "pretrained", model_name_for_dir)
-    else:
-        rel_ckpt_path = os.path.relpath(checkpoint_path, start=os.getcwd())
-        evals_dir = os.path.join("evals", rel_ckpt_path)
-    os.makedirs(evals_dir, exist_ok=True)
-    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    tsv_path = os.path.join(evals_dir, f"eval_{dt_str}.tsv")
-    json_path = os.path.join(evals_dir, f"eval_{dt_str}.json")
-    with open(tsv_path, "w", encoding="utf-8") as f:
-        f.write("path\treference\thypothesis\n")
-        for p, ref, hyp in zip(file_paths, label_str, pred_str):
-            f.write(f"{p}\t{ref}\t{hyp}\n")
-    # Collect config for JSON
-    eval_config = {
-        "wer": wer,
-        "language": lang,
-        "eval_mode": eval_mode_str,
-        "dataset_name": dataset_name,
-        "model_name": checkpoint_path if is_pretrained else None,
-        "checkpoint_path": None if is_pretrained else checkpoint_path,
-        "num_samples": len(samples),
-        "datetime": dt_str,
-    }
-    with open(json_path, "w", encoding="utf-8") as jf:
-        json.dump(eval_config, jf, indent=2)
-    print(f"Evaluation log saved to: {tsv_path}\nConfig saved to: {json_path}")
 
 def gradio_transcribe_interface(
     checkpoint_path,

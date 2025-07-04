@@ -11,6 +11,12 @@ wheels/
 datasets/
 models/
 evals/as_test/
-/checkpoints/
 Checkpoint Files/
 .gradio/
+checkpoints/whisper-medium-as/*
+!checkpoints/whisper-medium-as/checkpoint-1000
+checkpoints/whisper-medium-as/checkpoint-1000/optimizer.pt
+checkpoints/whisper-medium-as/checkpoint-1000/model.safetensors
+.env
+checkpoints/
+evals/pretrained/openai_whisper-medium/audio/
