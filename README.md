@@ -1,3 +1,4 @@
+
 # Whisper Fine-Tuning: Detailed Guide
 
 ## Overview
@@ -28,8 +29,10 @@ whisper-finetune/
 
 ---
 
+
 ## 2. Configuration: `config.yaml`
 All script and training arguments are set in `config.yaml`. Example:
+custom_dataset: null  # Path to a custom TSV file (with 'path' and 'sentence' columns) for custom dataset fine-tuning. If set, overrides dataset_name and dataset_cache.
 
 ```yaml
 # General configuration
@@ -73,8 +76,10 @@ push_to_hub: true
 
 ---
 
+
 ## 3. Command-Line Arguments
 All arguments can be overridden from the CLI. Example:
+  --custom_dataset: Path to a custom TSV file for custom dataset fine-tuning (overrides dataset_name/dataset_cache if set in config)
 
 ```
 python whisper_finetune_script.py --config config.yaml -g 0 --max-steps 8000 --model-name whisper-large --lang as
@@ -95,7 +100,31 @@ python whisper_finetune_script.py --config config.yaml -g 0 --max-steps 8000 --m
 
 ---
 
-## 4. Running Training
+## 4. Custom Dataset Fine-Tuning
+
+### Using a Custom Dataset (e.g., for Manipuri, ISO 639-3: mni)
+
+To fine-tune Whisper on your own dataset (e.g., a collection of audio files and transcriptions):
+
+1. Prepare a TSV file (tab-separated) with columns `path` (audio filename) and `sentence` (transcription). Example:
+   ```
+   path\tsentence
+   1.mp3\tThis is a sample sentence.
+   2.mp3\tAnother example.
+   ...
+   ```
+2. Place your audio files in a directory (e.g., `datasets/lamzing/audio/`).
+3. Set `custom_dataset` in your `config.yaml` to the path of your TSV file (e.g., `datasets/lamzing/combined.tsv`).
+4. Set `lang: mni` (or your language code) in `config.yaml`.
+5. Run training as usual. The script will automatically:
+   - Split your data into train/test (90/10 split)
+   - Prepare audio and text for Whisper
+   - Name the checkpoint as `<dataset_folder>-<model_name>-<lang>` (e.g., `lamzing-whisper-medium-mni`)
+   - Save checkpoints and logs as usual
+
+**Note:** If `custom_dataset` is set, the script ignores `dataset_name` and `dataset_cache`.
+
+---
 
 ### Bash Script: `run_training.sh`
 ```bash
@@ -150,14 +179,16 @@ nohup python whisper_finetune_script.py -g 1 > train.log 2>&1 &
 
 ---
 
+
 ## 8. Example: Quick Start
 
 1. Edit `config.yaml` with your dataset/model/token.
-2. Make the training script executable (only needed once after git clone):
+2. (Optional) For custom datasets, set `custom_dataset` to your TSV file and `lang` to your language code (e.g., `mni`).
+3. Make the training script executable (only needed once after git clone):
    ```bash
    chmod +x run_training.sh
    ```
-3. Run:
+4. Run:
    ```bash
    bash run_training.sh
    # or
@@ -165,7 +196,7 @@ nohup python whisper_finetune_script.py -g 1 > train.log 2>&1 &
    # To monitor training log in real time:
    tail -f train.log
    ```
-4. Monitor progress in `train.log` or with TensorBoard.
+5. Monitor progress in `train.log` or with TensorBoard.
 
 ---
 

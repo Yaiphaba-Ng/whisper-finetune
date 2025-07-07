@@ -2,14 +2,15 @@
 # General configuration
 # (Set these to match your dataset and model preferences)
 
-lang: as  # ISO 639-1/2/3 code for both dataset and model language
+lang: mni  # ISO 639-1/2/3 code for both dataset and model language
 dataset_name: mozilla-foundation/common_voice_11_0
 dataset_cache: ./datasets
-model_name: whisper-medium
+custom_dataset: ./datasets/lamzing
+model_name: whisper-small
 model_cache: ./models
 gpu_device: null
 whisper_pretrained: null  # If null, defaults to openai/<model_name>
-checkpoint_name: null     # If null, defaults to <model_name>-<lang>
+checkpoint_name: null     # If null, defaults to <dataset_name>-<model_name>-<lang>
 checkpoint_dir: null      # If null, defaults to ./checkpoints/<checkpoint_name>
 
 # Training arguments (passed to Hugging Face Seq2SeqTrainingArguments)
