@@ -5,7 +5,7 @@
 lang: mni  # ISO 639-1/2/3 code for both dataset and model language
 dataset_name: mozilla-foundation/common_voice_11_0
 dataset_cache: ./datasets
-custom_dataset: ./datasets/lamzing
+custom_dataset: ./datasets/lamzing/data.tsv
 model_name: whisper-small
 model_cache: ./models
 gpu_device: null
