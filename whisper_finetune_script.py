@@ -322,6 +322,12 @@ def finetune_custom_dataset(
     # Add audio column (load audio from file)
     dataset = dataset.cast_column("path", Audio(sampling_rate=16000))
     # Load processor, tokenizer, etc.
+    # Robustly resolve whisper_pretrained if None or invalid
+    if not whisper_pretrained or whisper_pretrained == "None":
+        if model_name:
+            whisper_pretrained = f"openai/{model_name}"
+        else:
+            raise ValueError("whisper_pretrained is not set and model_name is not provided.")
     feature_extractor = WhisperFeatureExtractor.from_pretrained(whisper_pretrained, cache_dir=model_cache)
     tokenizer = WhisperTokenizer.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
     processor = WhisperProcessor.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
@@ -750,7 +756,10 @@ def main():
     dataset_cache = args.dataset_cache if args.dataset_cache is not None else config_dict.get('dataset_cache', './datasets')
     model_name = args.model_name if args.model_name is not None else config_dict.get('model_name', 'whisper-medium')
     model_cache = args.model_cache if args.model_cache is not None else config_dict.get('model_cache', './models')
-    whisper_pretrained = args.whisper_pretrained if args.whisper_pretrained is not None else config_dict.get('whisper_pretrained', f"openai/{model_name}")
+    # Robustly resolve whisper_pretrained: always set to openai/<model_name> if None or empty
+    whisper_pretrained = args.whisper_pretrained if args.whisper_pretrained not in [None, '', 'null', 'None'] else config_dict.get('whisper_pretrained')
+    if not whisper_pretrained or whisper_pretrained in ['None', 'null', None, '']:
+        whisper_pretrained = f"openai/{model_name}"
     checkpoint_name = args.checkpoint_name if args.checkpoint_name is not None else config_dict.get('checkpoint_name', f"{model_name}-{lang}")
     checkpoint_dir = args.checkpoint_dir if args.checkpoint_dir is not None else config_dict.get('checkpoint_dir', f"./checkpoints/{checkpoint_name}")
     max_steps = args.max_steps if args.max_steps is not None else config_dict.get('max_steps', 4000)
@@ -767,25 +776,29 @@ def main():
             dataset_folder = os.path.basename(os.path.dirname(custom_dataset_path.rstrip('/\\')))
             custom_checkpoint_name = f"{dataset_folder}-{model_name}-{lang}"
             custom_checkpoint_dir = os.path.join("./checkpoints", custom_checkpoint_name)
+            # Ensure whisper_pretrained is always valid for custom dataset
+            resolved_whisper_pretrained = whisper_pretrained if whisper_pretrained not in [None, '', 'null', 'None'] else f"openai/{model_name}"
             finetune_custom_dataset(
                 custom_dataset_path=custom_dataset_path,
                 lang=lang,
                 model_name=model_name,
                 model_cache=model_cache,
-                whisper_pretrained=whisper_pretrained,
+                whisper_pretrained=resolved_whisper_pretrained,
                 checkpoint_name=custom_checkpoint_name,
                 checkpoint_dir=custom_checkpoint_dir,
                 max_steps=max_steps,
                 training_args_dict=training_args_dict
             )
         else:
+            # Ensure whisper_pretrained is always valid for standard training
+            resolved_whisper_pretrained = whisper_pretrained if whisper_pretrained not in [None, '', 'null', 'None'] else f"openai/{model_name}"
             finetune_whisper(
                 lang=lang,
                 dataset_name=dataset_name,
                 dataset_cache=dataset_cache,
                 model_name=model_name,
                 model_cache=model_cache,
-                whisper_pretrained=whisper_pretrained,
+                whisper_pretrained=resolved_whisper_pretrained,
                 checkpoint_name=checkpoint_name,
                 checkpoint_dir=checkpoint_dir,
                 max_steps=max_steps,
