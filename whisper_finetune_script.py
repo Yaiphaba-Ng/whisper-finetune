@@ -23,8 +23,10 @@ else:
     print("HF_TOKEN not found in .env file.")
 
 # Early parse for GPU
+
 parser = argparse.ArgumentParser()
 parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
+parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
 args, unknown = parser.parse_known_args()
 
 gpu_device = args.gpu_device
