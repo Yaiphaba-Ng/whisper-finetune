@@ -8,28 +8,36 @@ from datetime import datetime
 import json
 import gradio as gr
 
-# # Load Hugging Face token from config.yaml
-# config = args.config
-# config_dict = {}
-# if config is not None and os.path.exists(config):
-#     with open(config, 'r') as f:
-#         config_dict = yaml.safe_load(f)
-#     print(f"Loaded all arguments from config: {config}")
+# Load Hugging Face token from .env file and set as environment variable
+from dotenv import load_dotenv
+import os
 
-# hf_token = config_dict.get('hf_token', None)
-# print(f"HF Token: {hf_token}")
-# from huggingface_hub import login
-# login(token=hf_token)
+load_dotenv()
+hf_token = os.getenv("HF_TOKEN", None)
+if hf_token:
+    os.environ["HF_TOKEN"] = hf_token
+    print("HF Token loaded from .env and set as environment variable.")
+    from huggingface_hub import login
+    login(token=hf_token)
+else:
+    print("HF_TOKEN not found in .env file.")
 
 # Early parse for GPU
 parser = argparse.ArgumentParser()
 parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
-parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
 args, unknown = parser.parse_known_args()
 
-if args.gpu_device is not None:
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_device)
-    print(f"Set CUDA_VISIBLE_DEVICES to {args.gpu_device} (will appear as device 0 in torch)")
+gpu_device = args.gpu_device
+
+# If not set via CLI, try to get from config file
+if gpu_device is None and args.config is not None and os.path.exists(args.config):
+    with open(args.config, 'r') as f:
+        config_yaml = yaml.safe_load(f)
+    gpu_device = config_yaml.get('gpu_device', None)
+
+if gpu_device is not None:
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_device)
+    print(f"Set CUDA_VISIBLE_DEVICES to {gpu_device} (will appear as device 0 in torch)")
     # Always use device 0 in torch if CUDA_VISIBLE_DEVICES is set
     torch.cuda.set_device(0)
 
@@ -74,8 +82,6 @@ def finetune_whisper(
     checkpoint_name = config.get('checkpoint_name') or (f"{model_name}-{lang}" if model_name and lang else None)
     checkpoint_dir = config.get('checkpoint_dir') or (f"./checkpoints/{checkpoint_name}" if checkpoint_name else None)
     max_steps = config.get('max_steps')
-    gpu_device = config.get('gpu_device')
-    hf_token = config.get('hf_token')
     # Update config dict with derived values so printout is correct
     config['whisper_pretrained'] = whisper_pretrained
     config['checkpoint_name'] = checkpoint_name
@@ -83,7 +89,7 @@ def finetune_whisper(
     # General config keys
     general_keys = [
         'lang','dataset_name','dataset_cache','model_name','model_cache',
-        'whisper_pretrained','checkpoint_name','checkpoint_dir','gpu_device','hf_token'
+        'whisper_pretrained','checkpoint_name','checkpoint_dir'
     ]
     print("\n===== Whisper Fine-tuning: General Configuration =====")
     for k in general_keys:
@@ -103,8 +109,6 @@ def finetune_whisper(
     checkpoint_name = config.get('checkpoint_name') or f"{model_name}-{lang}"
     checkpoint_dir = config.get('checkpoint_dir') or f"./checkpoints/{checkpoint_name}"
     max_steps = config.get('max_steps')
-    gpu_device = config.get('gpu_device')
-    hf_token = config.get('hf_token')
 
     # Load dataset
     common_voice = DatasetDict()
@@ -273,6 +277,171 @@ def finetune_whisper(
     feature_extractor.save_pretrained(training_args.output_dir)
     tokenizer.save_pretrained(training_args.output_dir)
     print("Push to hub complete.")
+
+def finetune_custom_dataset(
+    custom_dataset_path,
+    lang,
+    model_name,
+    model_cache,
+    whisper_pretrained,
+    checkpoint_name,
+    checkpoint_dir,
+    max_steps,
+    training_args_dict
+):
+    """
+    Fine-tune Whisper on a custom dataset (TSV with 'path' and 'sentence' columns).
+    """
+    import pandas as pd
+    from datasets import Dataset, DatasetDict, Audio
+    from transformers import (
+        WhisperFeatureExtractor, WhisperTokenizer, WhisperProcessor,
+        WhisperForConditionalGeneration, Seq2SeqTrainingArguments, Seq2SeqTrainer
+    )
+    import evaluate
+    from dataclasses import dataclass
+    from typing import Any, Dict, List, Union
+    import torch
+    import numpy as np
+    import soundfile as sf
+    # Load TSV
+    df = pd.read_csv(custom_dataset_path, sep='\t')
+    # Remove rows with missing values
+    df = df.dropna(subset=['path', 'sentence'])
+    # Shuffle and split (90% train, 10% test)
+    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    n_train = int(0.9 * len(df))
+    df_train = df.iloc[:n_train]
+    df_test = df.iloc[n_train:]
+    # Convert to HuggingFace Datasets
+    ds_train = Dataset.from_pandas(df_train, preserve_index=False)
+    ds_test = Dataset.from_pandas(df_test, preserve_index=False)
+    dataset = DatasetDict({"train": ds_train, "test": ds_test})
+    # Add audio column (load audio from file)
+    dataset = dataset.cast_column("path", Audio(sampling_rate=16000))
+    # Load processor, tokenizer, etc.
+    feature_extractor = WhisperFeatureExtractor.from_pretrained(whisper_pretrained, cache_dir=model_cache)
+    tokenizer = WhisperTokenizer.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
+    processor = WhisperProcessor.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
+    # Prepare dataset
+    def prepare_dataset(batch):
+        audio = batch["path"]
+        batch["input_features"] = feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"]).input_features[0]
+        batch["labels"] = tokenizer(batch["sentence"]).input_ids
+        return batch
+    dataset = dataset.map(prepare_dataset, remove_columns=dataset["train"].column_names, num_proc=1)
+    # Model
+    model = WhisperForConditionalGeneration.from_pretrained(whisper_pretrained, cache_dir=model_cache)
+    model.generation_config.language = lang
+    model.generation_config.task = "transcribe"
+    model.config.use_cache = False
+    # Data collator
+    @dataclass
+    class DataCollatorSpeechSeq2SeqWithPadding:
+        processor: Any
+        decoder_start_token_id: int
+        def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+            input_features = [{"input_features": feature["input_features"]} for feature in features]
+            batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
+            if "attention_mask" not in batch:
+                batch["attention_mask"] = torch.ones(batch["input_features"].shape[:-1], dtype=torch.long)
+            label_features = [{"input_ids": feature["labels"]} for feature in features]
+            labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
+            labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
+            if (labels[:, 0] == self.decoder_start_token_id).all().cpu().item():
+                labels = labels[:, 1:]
+            batch["labels"] = labels
+            return batch
+    data_collator = DataCollatorSpeechSeq2SeqWithPadding(
+        processor=processor,
+        decoder_start_token_id=model.config.decoder_start_token_id,
+    )
+    # Metrics
+    metric = evaluate.load("wer")
+    def compute_metrics(pred):
+        pred_ids = pred.predictions
+        label_ids = pred.label_ids
+        label_ids[label_ids == -100] = tokenizer.pad_token_id
+        pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+        label_str = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
+        wer = 100 * metric.compute(predictions=pred_str, references=label_str)
+        return {"wer": wer}
+    # Set/override with function arguments
+    training_args_dict.setdefault('output_dir', checkpoint_dir)
+    training_args_dict.setdefault('per_device_train_batch_size', 16)
+    training_args_dict.setdefault('gradient_accumulation_steps', 1)
+    training_args_dict.setdefault('learning_rate', 1e-5)
+    training_args_dict.setdefault('warmup_steps', 500)
+    training_args_dict.setdefault('max_steps', max_steps)
+    training_args_dict.setdefault('gradient_checkpointing', True)
+    training_args_dict.setdefault('fp16', True)
+    training_args_dict.setdefault('eval_strategy', 'steps')
+    training_args_dict.setdefault('per_device_eval_batch_size', 8)
+    training_args_dict.setdefault('predict_with_generate', True)
+    training_args_dict.setdefault('generation_max_length', 225)
+    training_args_dict.setdefault('save_steps', 1000)
+    training_args_dict.setdefault('eval_steps', 1000)
+    training_args_dict.setdefault('logging_steps', 25)
+    training_args_dict.setdefault('report_to', ["tensorboard"])
+    training_args_dict.setdefault('load_best_model_at_end', True)
+    training_args_dict.setdefault('metric_for_best_model', "wer")
+    training_args_dict.setdefault('greater_is_better', False)
+    training_args_dict.setdefault('push_to_hub', True)
+    training_args_dict.setdefault('save_total_limit', 3)
+    # Type-cast known numeric training arguments to correct types
+    numeric_casts = {
+        'learning_rate': float,
+        'warmup_steps': int,
+        'max_steps': int,
+        'per_device_train_batch_size': int,
+        'gradient_accumulation_steps': int,
+        'per_device_eval_batch_size': int,
+        'generation_max_length': int,
+        'save_steps': int,
+        'save_total_limit': int,
+        'eval_steps': int,
+        'logging_steps': int,
+    }
+    for k, cast in numeric_casts.items():
+        if k in training_args_dict and training_args_dict[k] is not None:
+            try:
+                training_args_dict[k] = cast(training_args_dict[k])
+            except Exception:
+                pass
+    training_args = Seq2SeqTrainingArguments(**training_args_dict)
+    trainer = Seq2SeqTrainer(
+        args=training_args,
+        model=model,
+        train_dataset=dataset["train"],
+        eval_dataset=dataset["test"],
+        data_collator=data_collator,
+        compute_metrics=compute_metrics,
+        processing_class=processor.feature_extractor,
+    )
+    # Train
+    import os
+    checkpoint_dir_to_check = training_args.output_dir
+    checkpoint_found = False
+    if os.path.isdir(checkpoint_dir_to_check):
+        for entry in os.listdir(checkpoint_dir_to_check):
+            if entry.startswith('checkpoint-') and os.path.isdir(os.path.join(checkpoint_dir_to_check, entry)):
+                checkpoint_found = True
+                break
+    if checkpoint_found:
+        print(f"Resuming training from last checkpoint in {checkpoint_dir_to_check}...")
+        trainer.train(resume_from_checkpoint=True)
+    else:
+        print(f"No valid checkpoint found in {checkpoint_dir_to_check}. Starting training from scratch...")
+        trainer.train()
+    # Evaluate on test set and print final WER
+    eval_results = trainer.evaluate()
+    print("Training complete. Best model saved at:", training_args.output_dir)
+    print(f"Final WER on test set: {eval_results.get('eval_wer', 'N/A')}")
+    # Save processor, feature_extractor, tokenizer
+    processor.save_pretrained(training_args.output_dir)
+    feature_extractor.save_pretrained(training_args.output_dir)
+    tokenizer.save_pretrained(training_args.output_dir)
+    print("Custom dataset fine-tuning complete.")
 
 def evaluate_checkpoint(
     checkpoint_path,
@@ -551,7 +720,6 @@ def main():
     parser.add_argument("-ck", "--checkpoint-name", dest="checkpoint_name", type=str, default=None, help="Checkpoint name (default: <model_name>-<model_lang>)")
     parser.add_argument("-cd", "--checkpoint-dir", dest="checkpoint_dir", type=str, default=None, help="Checkpoint directory (default: ./checkpoints/<checkpoint_name>)")
     parser.add_argument('-t', '--max-steps', dest='max_steps', type=int, default=None, help='Max training steps (default: 4000)')
-    parser.add_argument("-g", "--gpu", dest="gpu_device", type=str, default=None, help="GPU device id to use (default: all available)")
     parser.add_argument('--config', dest='config', type=str, default='config.yaml', help='YAML config file for all script and training arguments (default: config.yaml)')
     parser.add_argument('-E', '--eval', dest='eval_mode', action='store_true', help='Run in evaluation mode')
     parser.add_argument('-ch', '--checkpoint', dest='eval_checkpoint', type=str, default=None, help='Checkpoint directory path for evaluation')
@@ -562,11 +730,10 @@ def main():
     # Determine mode
     if args.eval_mode:
         mode = "eval"
+    elif args.gradio_mode:
+        mode = "gradio"
     else:
-        mode = input("Select mode (train/eval): ").strip().lower()
-    if mode not in ["train", "eval", "gradio"]:
-        print("Invalid mode. Please select 'train' or 'eval'.")
-        sys.exit(1)
+        mode = "train"
 
     config = args.config
     config_dict = {}
@@ -585,13 +752,11 @@ def main():
     checkpoint_name = args.checkpoint_name if args.checkpoint_name is not None else config_dict.get('checkpoint_name', f"{model_name}-{lang}")
     checkpoint_dir = args.checkpoint_dir if args.checkpoint_dir is not None else config_dict.get('checkpoint_dir', f"./checkpoints/{checkpoint_name}")
     max_steps = args.max_steps if args.max_steps is not None else config_dict.get('max_steps', 4000)
-    gpu_device = args.gpu_device if args.gpu_device is not None else config_dict.get('gpu_device', None)
-    hf_token = config_dict.get('hf_token', None)
 
     if mode == "train":
         # Prepare training_args_dict for Seq2SeqTrainingArguments
         training_args_dict = {k: v for k, v in config_dict.items() if k not in [
-            'lang','dataset_name','dataset_cache','model_name','model_cache','whisper_pretrained','checkpoint_name','checkpoint_dir','training_max_steps','gpu_device','hf_token','custom_dataset']}
+            'lang','dataset_name','dataset_cache','model_name','model_cache','whisper_pretrained','checkpoint_name','checkpoint_dir','training_max_steps','custom_dataset']}
 
         # If custom_dataset is set, use custom fine-tuning logic
         if config_dict.get('custom_dataset'):
@@ -609,8 +774,6 @@ def main():
                 checkpoint_name=custom_checkpoint_name,
                 checkpoint_dir=custom_checkpoint_dir,
                 max_steps=max_steps,
-                gpu_device=gpu_device,
-                hf_token=hf_token,
                 training_args_dict=training_args_dict
             )
         else:
@@ -624,178 +787,10 @@ def main():
                 checkpoint_name=checkpoint_name,
                 checkpoint_dir=checkpoint_dir,
                 max_steps=max_steps,
-                gpu_device=gpu_device,
-                hf_token=hf_token,
                 training_args_dict=training_args_dict
             )
 
-        def finetune_custom_dataset(
-            custom_dataset_path,
-            lang,
-            model_name,
-            model_cache,
-            whisper_pretrained,
-            checkpoint_name,
-            checkpoint_dir,
-            max_steps,
-            gpu_device,
-            hf_token,
-            training_args_dict
-        ):
-            """
-            Fine-tune Whisper on a custom dataset (TSV with 'path' and 'sentence' columns).
-            """
-            import pandas as pd
-            from datasets import Dataset, DatasetDict, Audio
-            from transformers import (
-                WhisperFeatureExtractor, WhisperTokenizer, WhisperProcessor,
-                WhisperForConditionalGeneration, Seq2SeqTrainingArguments, Seq2SeqTrainer
-            )
-            import evaluate
-            from dataclasses import dataclass
-            from typing import Any, Dict, List, Union
-            import torch
-            import numpy as np
-            import soundfile as sf
-            # Load TSV
-            df = pd.read_csv(custom_dataset_path, sep='\t')
-            # Remove rows with missing values
-            df = df.dropna(subset=['path', 'sentence'])
-            # Shuffle and split (90% train, 10% test)
-            df = df.sample(frac=1, random_state=42).reset_index(drop=True)
-            n_train = int(0.9 * len(df))
-            df_train = df.iloc[:n_train]
-            df_test = df.iloc[n_train:]
-            # Convert to HuggingFace Datasets
-            ds_train = Dataset.from_pandas(df_train, preserve_index=False)
-            ds_test = Dataset.from_pandas(df_test, preserve_index=False)
-            dataset = DatasetDict({"train": ds_train, "test": ds_test})
-            # Add audio column (load audio from file)
-            dataset = dataset.cast_column("path", Audio(sampling_rate=16000))
-            # Load processor, tokenizer, etc.
-            feature_extractor = WhisperFeatureExtractor.from_pretrained(whisper_pretrained, cache_dir=model_cache)
-            tokenizer = WhisperTokenizer.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
-            processor = WhisperProcessor.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
-            # Prepare dataset
-            def prepare_dataset(batch):
-                audio = batch["path"]
-                batch["input_features"] = feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"]).input_features[0]
-                batch["labels"] = tokenizer(batch["sentence"]).input_ids
-                return batch
-            dataset = dataset.map(prepare_dataset, remove_columns=dataset["train"].column_names, num_proc=1)
-            # Model
-            model = WhisperForConditionalGeneration.from_pretrained(whisper_pretrained, cache_dir=model_cache)
-            model.generation_config.language = lang
-            model.generation_config.task = "transcribe"
-            model.config.use_cache = False
-            # Data collator
-            @dataclass
-            class DataCollatorSpeechSeq2SeqWithPadding:
-                processor: Any
-                decoder_start_token_id: int
-                def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-                    input_features = [{"input_features": feature["input_features"]} for feature in features]
-                    batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
-                    if "attention_mask" not in batch:
-                        batch["attention_mask"] = torch.ones(batch["input_features"].shape[:-1], dtype=torch.long)
-                    label_features = [{"input_ids": feature["labels"]} for feature in features]
-                    labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
-                    labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
-                    if (labels[:, 0] == self.decoder_start_token_id).all().cpu().item():
-                        labels = labels[:, 1:]
-                    batch["labels"] = labels
-                    return batch
-            data_collator = DataCollatorSpeechSeq2SeqWithPadding(
-                processor=processor,
-                decoder_start_token_id=model.config.decoder_start_token_id,
-            )
-            # Metrics
-            metric = evaluate.load("wer")
-            def compute_metrics(pred):
-                pred_ids = pred.predictions
-                label_ids = pred.label_ids
-                label_ids[label_ids == -100] = tokenizer.pad_token_id
-                pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
-                label_str = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
-                wer = 100 * metric.compute(predictions=pred_str, references=label_str)
-                return {"wer": wer}
-            # Set/override with function arguments
-            training_args_dict.setdefault('output_dir', checkpoint_dir)
-            training_args_dict.setdefault('per_device_train_batch_size', 16)
-            training_args_dict.setdefault('gradient_accumulation_steps', 1)
-            training_args_dict.setdefault('learning_rate', 1e-5)
-            training_args_dict.setdefault('warmup_steps', 500)
-            training_args_dict.setdefault('max_steps', max_steps)
-            training_args_dict.setdefault('gradient_checkpointing', True)
-            training_args_dict.setdefault('fp16', True)
-            training_args_dict.setdefault('eval_strategy', 'steps')
-            training_args_dict.setdefault('per_device_eval_batch_size', 8)
-            training_args_dict.setdefault('predict_with_generate', True)
-            training_args_dict.setdefault('generation_max_length', 225)
-            training_args_dict.setdefault('save_steps', 1000)
-            training_args_dict.setdefault('eval_steps', 1000)
-            training_args_dict.setdefault('logging_steps', 25)
-            training_args_dict.setdefault('report_to', ["tensorboard"])
-            training_args_dict.setdefault('load_best_model_at_end', True)
-            training_args_dict.setdefault('metric_for_best_model', "wer")
-            training_args_dict.setdefault('greater_is_better', False)
-            training_args_dict.setdefault('push_to_hub', True)
-            training_args_dict.setdefault('save_total_limit', 3)
 
-            # Type-cast known numeric training arguments to correct types
-            numeric_casts = {
-                'learning_rate': float,
-                'warmup_steps': int,
-                'max_steps': int,
-                'per_device_train_batch_size': int,
-                'gradient_accumulation_steps': int,
-                'per_device_eval_batch_size': int,
-                'generation_max_length': int,
-                'save_steps': int,
-                'save_total_limit': int,
-                'eval_steps': int,
-                'logging_steps': int,
-            }
-            for k, cast in numeric_casts.items():
-                if k in training_args_dict and training_args_dict[k] is not None:
-                    try:
-                        training_args_dict[k] = cast(training_args_dict[k])
-                    except Exception:
-                        pass
-            training_args = Seq2SeqTrainingArguments(**training_args_dict)
-            trainer = Seq2SeqTrainer(
-                args=training_args,
-                model=model,
-                train_dataset=dataset["train"],
-                eval_dataset=dataset["test"],
-                data_collator=data_collator,
-                compute_metrics=compute_metrics,
-                processing_class=processor.feature_extractor,
-            )
-            # Train
-            import os
-            checkpoint_dir_to_check = training_args.output_dir
-            checkpoint_found = False
-            if os.path.isdir(checkpoint_dir_to_check):
-                for entry in os.listdir(checkpoint_dir_to_check):
-                    if entry.startswith('checkpoint-') and os.path.isdir(os.path.join(checkpoint_dir_to_check, entry)):
-                        checkpoint_found = True
-                        break
-            if checkpoint_found:
-                print(f"Resuming training from last checkpoint in {checkpoint_dir_to_check}...")
-                trainer.train(resume_from_checkpoint=True)
-            else:
-                print(f"No valid checkpoint found in {checkpoint_dir_to_check}. Starting training from scratch...")
-                trainer.train()
-            # Evaluate on test set and print final WER
-            eval_results = trainer.evaluate()
-            print("Training complete. Best model saved at:", training_args.output_dir)
-            print(f"Final WER on test set: {eval_results.get('eval_wer', 'N/A')}")
-            # Save processor, feature_extractor, tokenizer
-            processor.save_pretrained(training_args.output_dir)
-            feature_extractor.save_pretrained(training_args.output_dir)
-            tokenizer.save_pretrained(training_args.output_dir)
-            print("Custom dataset fine-tuning complete.")
     elif mode == "eval":
         if args.pretrained_model:
             # Evaluate HuggingFace pretrained model
