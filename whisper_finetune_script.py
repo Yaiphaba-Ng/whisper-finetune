@@ -319,6 +319,27 @@ def finetune_custom_dataset(
     ds_train = Dataset.from_pandas(df_train, preserve_index=False)
     ds_test = Dataset.from_pandas(df_test, preserve_index=False)
     dataset = DatasetDict({"train": ds_train, "test": ds_test})
+    # Patch: Update 'path' column to absolute path if not already, searching in ./audio next to the TSV if needed
+    import os
+    tsv_dir = os.path.dirname(os.path.abspath(custom_dataset_path))
+    audio_dir = os.path.join(tsv_dir, "audio")
+    def resolve_audio_path(p):
+        # If already absolute and exists, return as is
+        if os.path.isabs(p) and os.path.exists(p):
+            return p
+        # Try relative to TSV dir
+        rel1 = os.path.join(tsv_dir, p)
+        if os.path.exists(rel1):
+            return rel1
+        # Try in audio/ subdir
+        rel2 = os.path.join(audio_dir, p)
+        if os.path.exists(rel2):
+            return rel2
+        # Not found, return original (will error later)
+        return p
+    # Update all paths in the dataset
+    for split in dataset:
+        dataset[split] = dataset[split].map(lambda x: {"path": resolve_audio_path(x["path"])} )
     # Add audio column (load audio from file)
     dataset = dataset.cast_column("path", Audio(sampling_rate=16000))
     # Load processor, tokenizer, etc.
