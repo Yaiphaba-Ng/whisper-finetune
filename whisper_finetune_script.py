@@ -808,58 +808,45 @@ def main():
     max_steps = args.max_steps if args.max_steps is not None else config_dict.get('max_steps', 4000)
 
     if mode == "train":
-        # Redirect all console logs to a log file in the checkpoint base dir
-        import sys
-        import os
-        log_file_path = os.path.join(checkpoint_dir, "train.log")
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        log_file = open(log_file_path, "a", encoding="utf-8")
-        old_stdout, old_stderr = sys.stdout, sys.stderr
-        sys.stdout = sys.stderr = log_file
-        try:
-            # Prepare training_args_dict for Seq2SeqTrainingArguments
-            training_args_dict = {k: v for k, v in config_dict.items() if k not in [
-                'lang','dataset_name','dataset_cache','model_name','model_cache','whisper_pretrained','checkpoint_name','checkpoint_dir','training_max_steps','custom_dataset']}
+        # Prepare training_args_dict for Seq2SeqTrainingArguments
+        training_args_dict = {k: v for k, v in config_dict.items() if k not in [
+            'lang','dataset_name','dataset_cache','model_name','model_cache','whisper_pretrained','checkpoint_name','checkpoint_dir','training_max_steps','custom_dataset']}
 
-            # If custom_dataset is set, use custom fine-tuning logic
-            if config_dict.get('custom_dataset'):
-                custom_dataset_path = config_dict['custom_dataset']
-                # Infer dataset folder name for checkpoint naming
-                dataset_folder = os.path.basename(os.path.dirname(custom_dataset_path.rstrip('/\\')))
-                custom_checkpoint_name = f"{dataset_folder}-{model_name}-{lang}"
-                custom_checkpoint_dir = os.path.join("./checkpoints", custom_checkpoint_name)
-                # Ensure whisper_pretrained is always valid for custom dataset
-                resolved_whisper_pretrained = whisper_pretrained if whisper_pretrained not in [None, '', 'null', 'None'] else f"openai/{model_name}"
-                finetune_custom_dataset(
-                    custom_dataset_path=custom_dataset_path,
-                    lang=lang,
-                    model_name=model_name,
-                    model_cache=model_cache,
-                    whisper_pretrained=resolved_whisper_pretrained,
-                    checkpoint_name=custom_checkpoint_name,
-                    checkpoint_dir=custom_checkpoint_dir,
-                    max_steps=max_steps,
-                    training_args_dict=training_args_dict
-                )
-            else:
-                # Ensure whisper_pretrained is always valid for standard training
-                resolved_whisper_pretrained = whisper_pretrained if whisper_pretrained not in [None, '', 'null', 'None'] else f"openai/{model_name}"
-                finetune_whisper(
-                    lang=lang,
-                    dataset_name=dataset_name,
-                    dataset_cache=dataset_cache,
-                    model_name=model_name,
-                    model_cache=model_cache,
-                    whisper_pretrained=resolved_whisper_pretrained,
-                    checkpoint_name=checkpoint_name,
-                    checkpoint_dir=checkpoint_dir,
-                    max_steps=max_steps,
-                    training_args_dict=training_args_dict
-                )
-        finally:
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
-            log_file.close()
+        # If custom_dataset is set, use custom fine-tuning logic
+        if config_dict.get('custom_dataset'):
+            custom_dataset_path = config_dict['custom_dataset']
+            # Infer dataset folder name for checkpoint naming
+            dataset_folder = os.path.basename(os.path.dirname(custom_dataset_path.rstrip('/\\')))
+            custom_checkpoint_name = f"{dataset_folder}-{model_name}-{lang}"
+            custom_checkpoint_dir = os.path.join("./checkpoints", custom_checkpoint_name)
+            # Ensure whisper_pretrained is always valid for custom dataset
+            resolved_whisper_pretrained = whisper_pretrained if whisper_pretrained not in [None, '', 'null', 'None'] else f"openai/{model_name}"
+            finetune_custom_dataset(
+                custom_dataset_path=custom_dataset_path,
+                lang=lang,
+                model_name=model_name,
+                model_cache=model_cache,
+                whisper_pretrained=resolved_whisper_pretrained,
+                checkpoint_name=custom_checkpoint_name,
+                checkpoint_dir=custom_checkpoint_dir,
+                max_steps=max_steps,
+                training_args_dict=training_args_dict
+            )
+        else:
+            # Ensure whisper_pretrained is always valid for standard training
+            resolved_whisper_pretrained = whisper_pretrained if whisper_pretrained not in [None, '', 'null', 'None'] else f"openai/{model_name}"
+            finetune_whisper(
+                lang=lang,
+                dataset_name=dataset_name,
+                dataset_cache=dataset_cache,
+                model_name=model_name,
+                model_cache=model_cache,
+                whisper_pretrained=resolved_whisper_pretrained,
+                checkpoint_name=checkpoint_name,
+                checkpoint_dir=checkpoint_dir,
+                max_steps=max_steps,
+                training_args_dict=training_args_dict
+            )
 
 
     elif mode == "eval":
