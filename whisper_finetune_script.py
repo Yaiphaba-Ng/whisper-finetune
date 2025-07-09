@@ -7,6 +7,11 @@ import random  # Added for evaluation sampling
 from datetime import datetime
 import json
 import gradio as gr
+import evaluate
+from dataclasses import dataclass
+from typing import Any, Dict, List, Union
+
+
 
 # Load Hugging Face token from .env file and set as environment variable
 from dotenv import load_dotenv
@@ -48,9 +53,6 @@ from transformers import (
     WhisperFeatureExtractor, WhisperTokenizer, WhisperProcessor,
     WhisperForConditionalGeneration, Seq2SeqTrainingArguments, Seq2SeqTrainer
 )
-import evaluate
-from dataclasses import dataclass
-from typing import Any, Dict, List, Union
 
 @dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
@@ -295,6 +297,7 @@ def finetune_custom_dataset(
     Fine-tune Whisper on a custom dataset (TSV with 'path' and 'sentence' columns).
     """
     import pandas as pd
+    import os
     from datasets import Dataset, DatasetDict, Audio
     from transformers import (
         WhisperFeatureExtractor, WhisperTokenizer, WhisperProcessor,
@@ -308,6 +311,10 @@ def finetune_custom_dataset(
     import soundfile as sf
     # Load TSV
     df = pd.read_csv(custom_dataset_path, sep='\t')
+    # Resolve audio directory next to the TSV file
+    audio_dir = os.path.join(os.path.dirname(custom_dataset_path), "audio")
+    # Prepend audio_dir to each path in the 'path' column
+    df['path'] = df['path'].apply(lambda p: os.path.join(audio_dir, p))
     # Remove rows with missing values
     df = df.dropna(subset=['path', 'sentence'])
     # Shuffle and split (90% train, 10% test)
@@ -328,9 +335,11 @@ def finetune_custom_dataset(
             whisper_pretrained = f"openai/{model_name}"
         else:
             raise ValueError("whisper_pretrained is not set and model_name is not provided.")
+    # Always use the custom tokenizer for Manipuri (monolingual)
+    custom_tokenizer_dir = os.path.join(os.path.dirname(__file__), "manipuri_tokenizer")
     feature_extractor = WhisperFeatureExtractor.from_pretrained(whisper_pretrained, cache_dir=model_cache)
-    tokenizer = WhisperTokenizer.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
-    processor = WhisperProcessor.from_pretrained(whisper_pretrained, language=lang, task="transcribe", cache_dir=model_cache)
+    tokenizer = WhisperTokenizer.from_pretrained(custom_tokenizer_dir, task="transcribe")
+    processor = WhisperProcessor.from_pretrained(whisper_pretrained, cache_dir=model_cache)
     # Prepare dataset
     def prepare_dataset(batch):
         audio = batch["path"]
@@ -416,7 +425,41 @@ def finetune_custom_dataset(
                 training_args_dict[k] = cast(training_args_dict[k])
             except Exception:
                 pass
-    training_args = Seq2SeqTrainingArguments(**training_args_dict)
+    # Remove unsupported arguments for Seq2SeqTrainingArguments
+    supported_args = [
+        'output_dir', 'overwrite_output_dir', 'do_train', 'do_eval', 'do_predict',
+        'evaluation_strategy', 'eval_strategy', 'prediction_loss_only', 'per_device_train_batch_size',
+        'per_device_eval_batch_size', 'per_gpu_train_batch_size', 'per_gpu_eval_batch_size',
+        'gradient_accumulation_steps', 'eval_accumulation_steps', 'learning_rate', 'weight_decay',
+        'adam_beta1', 'adam_beta2', 'adam_epsilon', 'max_grad_norm', 'num_train_epochs', 'max_steps',
+        'lr_scheduler_type', 'warmup_ratio', 'warmup_steps', 'log_level', 'log_level_replica',
+        'log_on_each_node', 'logging_dir', 'logging_strategy', 'logging_first_step', 'logging_steps',
+        'logging_nan_inf_filter', 'save_strategy', 'save_steps', 'save_total_limit', 'save_safetensors',
+        'save_on_each_node', 'no_cuda', 'seed', 'data_seed', 'bf16', 'fp16', 'fp16_opt_level',
+        'fp16_backend', 'half_precision_backend', 'bf16_full_eval', 'tf32', 'local_rank', 'xpu_backend',
+        'tpu_num_cores', 'tpu_metrics_debug', 'debug', 'dataloader_drop_last', 'eval_steps',
+        'dataloader_num_workers', 'past_index', 'run_name', 'disable_tqdm', 'remove_unused_columns',
+        'label_names', 'load_best_model_at_end', 'metric_for_best_model', 'greater_is_better',
+        'ignore_data_skip', 'sharded_ddp', 'deepspeed', 'label_smoothing_factor', 'optim',
+        'adafactor', 'group_by_length', 'length_column_name', 'report_to', 'ddp_find_unused_parameters',
+        'ddp_bucket_cap_mb', 'dataloader_pin_memory', 'skip_memory_metrics', 'use_legacy_prediction_loop',
+        'push_to_hub', 'resume_from_checkpoint', 'hub_model_id', 'hub_strategy', 'hub_token',
+        'hub_private_repo', 'gradient_checkpointing', 'predict_with_generate', 'generation_max_length',
+        'generation_num_beams', 'generation_config', 'label_smoothing', 'include_inputs_for_metrics',
+        'optim_args', 'adafactor', 'remove_unused_columns', 'load_best_model_at_end', 'metric_for_best_model',
+        'greater_is_better', 'push_to_hub', 'save_total_limit', 'predict_with_generate', 'generation_max_length',
+        'generation_num_beams', 'generation_config', 'include_inputs_for_metrics', 'ddp_timeout',
+        'torch_compile', 'torch_compile_backend', 'torch_compile_mode', 'fsdp', 'fsdp_min_num_params',
+        'fsdp_config', 'fsdp_transformer_layer_cls_to_wrap', 'accelerator', 'mp_parameters',
+        'auto_find_batch_size', 'full_determinism', 'torchdynamo', 'ray_scope', 'ddp_broadcast_buffers',
+        'sortish_sampler', 'predict_with_generate', 'generation_max_length', 'generation_num_beams',
+        'generation_config', 'include_inputs_for_metrics', 'ddp_timeout', 'torch_compile',
+        'torch_compile_backend', 'torch_compile_mode', 'fsdp', 'fsdp_min_num_params', 'fsdp_config',
+        'fsdp_transformer_layer_cls_to_wrap', 'accelerator', 'mp_parameters', 'auto_find_batch_size',
+        'full_determinism', 'torchdynamo', 'ray_scope', 'ddp_broadcast_buffers', 'sortish_sampler'
+    ]
+    filtered_training_args_dict = {k: v for k, v in training_args_dict.items() if k in supported_args}
+    training_args = Seq2SeqTrainingArguments(**filtered_training_args_dict)
     trainer = Seq2SeqTrainer(
         args=training_args,
         model=model,
