@@ -17,15 +17,15 @@ from typing import Any, Dict, List, Union
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
-hf_token = os.getenv("HF_TOKEN", None)
-if hf_token:
-    os.environ["HF_TOKEN"] = hf_token
-    print("HF Token loaded from .env and set as environment variable.")
-    from huggingface_hub import login
-    login(token=hf_token)
-else:
-    print("HF_TOKEN not found in .env file.")
+# load_dotenv()
+# hf_token = os.getenv("HF_TOKEN", None)
+# if hf_token:
+#     os.environ["HF_TOKEN"] = hf_token
+#     print("HF Token loaded from .env and set as environment variable.")
+#     from huggingface_hub import login
+#     login(token=hf_token)
+# else:
+#     print("HF_TOKEN not found in .env file.")
 
 # Early parse for GPU
 

@@ -2,7 +2,7 @@
 # General configuration
 # (Set these to match your dataset and model preferences)
 
-lang: mni  # ISO 639-1/2/3 code for both dataset and model language
+lang: as  # ISO 639-1/2/3 code for both dataset and model language
 dataset_name: mozilla-foundation/common_voice_11_0
 dataset_cache: ./datasets
 custom_dataset: ./datasets/lamzing/data.tsv

@@ -82,7 +82,7 @@ All arguments can be overridden from the CLI. Example:
   --custom_dataset: Path to a custom TSV file for custom dataset fine-tuning (overrides dataset_name/dataset_cache if set in config)
 
 ```
-python whisper_finetune_script.py --config config.yaml -g 0 --max-steps 8000 --model-name whisper-large --lang as
+python whisper_finetune_script.py --max-steps 8000 --model-name whisper-large --lang as
 ```
 
 **Key CLI arguments:**
