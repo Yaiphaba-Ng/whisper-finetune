@@ -5,5 +5,3 @@ evaluate
 jiwer
 tensorboard
 gradio
-sentencepiece
-protobuf
